@@ -126,3 +126,18 @@ def test_build_model_rich_research_plus_tierxi_end_to_end():
     assert m.fill_spendable == 5000
     assert m.fill_earned == 0
     assert [tk.affordable for tk in m.ticks] == [True, True, False]
+
+
+def test_elite_maxed_clamps_to_cap():
+    snap = t.VehicleSnapshot(
+        tier=9, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[t.ProgressionStep(1, "fm1", "fm1.png", 2000, True)],  # done
+        elite_earned_xp=300000, elite_cap_level=150,
+        elite_milestones=[t.Milestone(10, 10000, "Bronze", "b.png"),
+                          t.Milestone(150, 200000, "Gold", "g.png")])  # all reached
+    m = build_model(snap)
+    assert m.mode == t.Mode.ELITE
+    assert m.ticks == []            # nothing remaining
+    assert m.scale_max == 200000    # anchored to cap, not collapsed to baseline
+    assert m.scale_min == 200000    # clamped (earned 300k exceeds cap 200k)
+    assert m.fill_earned == 200000  # fill clamped to cap
