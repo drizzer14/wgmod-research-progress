@@ -83,6 +83,10 @@ Evaluated for the selected vehicle, in priority order.
   **not** apply — elite levels are earned on the vehicle, not bought.
 - The elite system applies to **all** elite vehicles, not only Tier XI. The milestone
   cap is tier-dependent (`level 150` for Tier XI; the last badge milestone otherwise).
+- **Clamping (maxed elite vehicle).** Elite-mode `scale_max` is anchored to the cap
+  (the highest milestone threshold), and the baseline/fill are clamped to never exceed
+  it. When a vehicle has reached/passed the final milestone, the bar renders **full**
+  (clamped) rather than collapsing to a zero-width range.
 
 ## 5. Architecture
 

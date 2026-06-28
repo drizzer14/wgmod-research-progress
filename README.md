@@ -1,9 +1,15 @@
-# WGMod
+# WGMod — Garage Research-Progress Bar
 
-A World of Tanks mod. Authored on macOS, tested/installed on a Windows PC.
+A World of Tanks mod that shows the selected vehicle's research progress as a
+Garage progress bar. Authored on macOS, tested/installed on a Windows PC.
 
-> See [`RESEARCH.md`](./RESEARCH.md) for WoT modding background (engine, file
-> structure, hooking, packaging, compliance).
+> **Continuing this project?** Start with **[`PHASE2-HANDOFF.md`](./PHASE2-HANDOFF.md)** —
+> Phase 1 (the domain layer) is done and tested; Phase 2 (engine + UI integration)
+> runs on the Windows PC.
+>
+> Design: [`docs/superpowers/specs/`](./docs/superpowers/specs/) · Plan:
+> [`docs/superpowers/plans/`](./docs/superpowers/plans/) · WoT modding background:
+> [`RESEARCH.md`](./RESEARCH.md).
 
 ## Layout
 
