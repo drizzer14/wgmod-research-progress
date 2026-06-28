@@ -1,7 +1,8 @@
 # Session Handoff — Research-Progress Bar (Phase 2, in-game working)
 
-_Updated 2026-06-28 (icons + field-mod session). Read tools/dev/README.md for the
-dev loop — note the NEW hot-reload loop for JS/CSS-only changes._
+_Updated 2026-06-29 (bar restyle session). Read tools/dev/README.md for the
+dev loop — note the hot-reload loop for JS/CSS-only changes (used throughout this
+session). NEXT SESSION FOCUS: real hover tooltips (name + XP)._
 
 ## TL;DR — where we are
 The mod **works in-game** on WoT **EU 2.3.0.1**. The Garage bar renders from live
@@ -17,22 +18,32 @@ now uses **real in-game icons**:
   total field-mod LEVELS, clamped to the tier cap.
 - **COMPLETE state** → class+elite badge (e.g. `mediumTank_elite.png`).
 
-This session's work is committed (HEAD `5008d23`, branch `main`, unpushed). Tests
-green (23, py3), 2.7-compiles clean.
+Branch `main`, unpushed. Latest commit `9b1c6ac` (bar restyle) — and the docs
+commit carrying this handoff on top. Tests green (23, py3), 2.7-compiles clean.
 
-**IMMEDIATE NEXT STEPS:**
-1. **Tier XI field-mod level cap is UNKNOWN and currently guessed.** `max_level()`
-   in `domain/resolvers/fieldmods.py` maps tier≥10→8, so tier **XI also gets 8**,
-   which is unverified. The owner has no non-fully-upgraded tier-XI tank to read it
-   live, so get the real cap from elsewhere: the EU **decompiled** post-progression
-   config (`post_progression*`/vehicle XML — re-clone branch `2.3`, see
-   tools/dev/README.md) or the WoT wiki. Confirmed caps so far: **VI–VII=5,
-   VIII=6, IX=7, X=8**.
-2. **Visually verify the elite badge** on a fully-maxed (all field-mods done) tank —
-   not yet seen in-game (no maxed tank was loaded at handoff). It's the COMPLETE
-   state: `img://gui/maps/icons/vehicleTypes/md/<class>_elite.png` ('-'→'_').
-3. **Confirm the field-mod counter** reads N/8 (tier 10) and N/5 (tier 6) in-game —
-   deployed at handoff but the owner moved to handoff before reporting back.
+**NEXT SESSION — TOOLTIPS (owner-set focus):**
+- Real hover **tooltips** on ticks (name + XP). Blocked by `pointer-events: none`
+  on `#wgmod-root`: DOM hover won't fire. Two routes (see the design-tokens doc's
+  "Native styling references"): (a) enable `pointer-events` on the ticks only —
+  watch for stealing clicks from the 3-D hangar; or (b) wire WoT's ViewModel-driven
+  tooltip manager. **This also fixes the empty field-mod tick names** — the
+  `step.action` label lookup in `engine_adapter._step_label` doesn't resolve yet
+  (see gotcha); tooltips need that name, so fix it as part of this.
+- The bar carries the data already: each tick has `name` + `xpRequired` in JS
+  (`mark.title` is set but Gameface doesn't render a native `title` tooltip).
+
+**STILL-OPEN SIDE ITEM (not tomorrow's focus):**
+- **Tier XI field-mod level cap is UNKNOWN and currently guessed.** `max_level()`
+  in `domain/resolvers/fieldmods.py` maps tier≥10→8, so tier **XI also gets 8**,
+  which is unverified. Owner has no non-fully-upgraded tier-XI tank to read it live;
+  get the real cap from the EU **decompiled** post-progression config (re-clone
+  branch `2.3`) or the WoT wiki. Confirmed caps so far: **VI–VII=5, VIII=6, IX=7,
+  X=8**.
+
+**CONFIRMED IN-GAME THIS SESSION (were open, now done):**
+- ✅ **Elite badge** renders correctly on a fully-maxed tank (COMPLETE state,
+  `img://gui/maps/icons/vehicleTypes/md/<class>_elite.png`).
+- ✅ **Field-mod counter** reads correctly (N/8 at tier 10, N/5 at tier 6).
 
 ## Architecture (as built, EU 2.3)
 - **Domain (engine-free, tested):** `wgmod_research/domain` — `VehicleSnapshot` →
@@ -74,8 +85,28 @@ docs/superpowers/research/decompiled-findings.md   # verified EU symbols
 ## Remaining v1 work
 1. **Tier XI field-mod cap** (see TL;DR #1) + **elite-badge visual verify** (#2) +
    **counter confirm** (#3).
-2. **Visual polish** — mostly DONE this session (all hot-reloadable for further
-   tuning; see the dev loop):
+2. **Visual polish** — DONE (icons session + the 2026-06-29 restyle; all
+   hot-reloadable for further tuning; see the dev loop). The 2026-06-29 restyle
+   (commit `9b1c6ac`) made the bar match WoT's own bar visual language, verified
+   against the client's `EditableProgress` / `Status` / `VehicleExperience` CSS:
+   - **flat fills** (the native bars use a plain `background-color`, NOT a
+     gradient — owner rejected the glossy sheen). Vehicle XP now uses its true
+     **combat-experience currency color `#dce0e0`** (not the old green); free XP
+     stays tan `#ecca9d`; COMPLETE stays `#64ba21` green.
+   - **two-tone frame**: a 2rem translucent-black outer border
+     (`rgba(0,0,0,0.75)`) + a 1rem inner border. The inner border AND the dense
+     segment notches are ONE `::after` overlay, `#888` with
+     **`mix-blend-mode: color-burn`** so they burn into the fill colors; the empty
+     channel is set to the same `rgba(0,0,0,0.75)` as the outer border, so over
+     unfilled zones color-burn collapses the notches/inner-border to black → one
+     seamless black frame.
+   - **dense notches** via a SINGLE tiled gradient (`background-size: 3rem 100%` +
+     `background-repeat: repeat`), the native VehicleExperience period — NOT
+     `repeating-linear-gradient` (its per-period rounding drifted). Pattern offset
+     by one gap so the first notch isn't glued to the inner border.
+   - lighter category title (`#ede6d9`); **drop-shadows** on the header icon and
+     tick glyphs; elite badge keeps only its baked-in shadow (filter disabled in
+     `.wg-complete`).
    - DONE: locked (prereqs-unmet) tech-tree ticks (gray). Field mods carry no
      prereq info so stay unlocked.
    - DONE: colors. Uses **literal hex** from `research/gameface-design-tokens.md`
@@ -136,6 +167,23 @@ Data flow: `engine_adapter` reads icon URLs + field-mod levels → domain `Tick`
   honor the hex fallback in `var(--x, #hex)`. Every color was a `var()`, so the bar
   rendered black. Fix: literal hex only. Custom properties are effectively unusable
   in our injected document.
+- **Gameface CSS that DOES work (used in the restyle):** `mix-blend-mode`
+  (`color-burn`, `multiply` — the client itself uses `additive`); `filter:
+  drop-shadow(...)` (chainable; use it instead of `box-shadow` for alpha/clip-path
+  shapes so the shadow hugs the silhouette); multi-stop `linear-gradient` /
+  `radial-gradient` + multiple backgrounds; `clip-path: polygon()`; `::before` /
+  `::after` pseudo-elements; `box-sizing: border-box`.
+- **For dense even tick/notch patterns, tile a SINGLE `linear-gradient` via
+  `background-size` + `background-repeat: repeat` — NOT `repeating-linear-gradient`**,
+  whose per-period rounding makes the spacing visibly drift across the bar. A tiled
+  single gradient snaps every tile pixel-identically.
+- **Native WoT bars are FLAT** (`EditableProgress_line` = plain `background-color`),
+  with a segmented pattern overlaid on top (`EditableProgress` / `VehicleExperience`
+  use period **3rem**). The green "done" tone is `#64ba21` (= `rgba(100,186,33)`,
+  from `lib.css` `Status`). Combat-XP currency = `#dce0e0`, free-XP = `#ecca9d`. To
+  re-extract more: unzip `res/packages/gui-part{1..4}.pkg` and grep the CSS under
+  `gui/gameface/_dist/production/**` (the team-HP battle bar is Flash/Scaleform, NOT
+  in the gameface bundles).
 - **Gameface ignores `object-fit` and clips `<img>` to its box; `width:auto`→0.**
   Use a div with `background-size:contain`. `clip-path: polygon(...)` DOES work
   (the field-mod hexagons use it).
