@@ -68,3 +68,40 @@ def test_tier11_all_nodes_done_is_elite_rewards():
     m = build_model(snap)
     assert m.mode == t.Mode.ELITE_PLUS_TIERXI_REWARDS
     assert m.scale_max == 200000
+
+
+def test_elite_potential_tierxi_only_is_research_plus_tierxi():
+    pot = t.UnlockItem(0, "Potential T11", "pot.png", 300000, "vehicle", False, True)
+    snap = t.VehicleSnapshot(tier=10, is_elite=True, vehicle_xp=0, free_xp=0,
+                             potential_tierxi=pot)  # no field mods, no real successor
+    m = build_model(snap)
+    assert m.mode == t.Mode.RESEARCH_PLUS_TIERXI
+    assert [tk.category for tk in m.ticks] == ["potentialXI"]
+    assert m.ticks[0].xp_position == 300000
+    assert m.scale_max == 300000
+
+
+def test_elite_fieldmods_only_no_successor_is_research_plus_tierxi():
+    snap = t.VehicleSnapshot(
+        tier=8, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[t.ProgressionStep(1, "fm1", "fm1.png", 1000, False),
+                         t.ProgressionStep(2, "fm2", "fm2.png", 2000, False)])
+    m = build_model(snap)
+    assert m.mode == t.Mode.RESEARCH_PLUS_TIERXI
+    assert [tk.category for tk in m.ticks] == ["fieldmod", "fieldmod"]
+    assert [tk.xp_position for tk in m.ticks] == [1000, 3000]
+    assert m.scale_max == 3000
+
+
+def test_elite_partial_fieldmods_then_successor_stacks_correctly():
+    succ = _u(99, 100000, kind="vehicle")
+    snap = t.VehicleSnapshot(
+        tier=10, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[t.ProgressionStep(1, "fm1", "fm1.png", 1000, True),   # unlocked, skip
+                         t.ProgressionStep(2, "fm2", "fm2.png", 3000, False)],
+        tierxi_successor=succ)
+    m = build_model(snap)
+    # remaining fm2 at 3000; successor stacked at 3000 + 100000
+    assert [tk.category for tk in m.ticks] == ["fieldmod", "tierXI"]
+    assert [tk.xp_position for tk in m.ticks] == [3000, 103000]
+    assert m.scale_max == 103000
