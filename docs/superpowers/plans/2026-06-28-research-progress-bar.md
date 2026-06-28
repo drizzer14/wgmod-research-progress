@@ -1147,3 +1147,11 @@ Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>"
 - **Spec coverage:** §3 bar model → Tasks 4–8 (cumulative positioning, remaining-only, stacked fill in builder/resolvers) + Task 12 (rendering). §4 state machine → Task 8. §5 architecture → file structure + Tasks 3/9/10/11/12. §6 data sources → Tasks 1 & 9. §7 UI → Tasks 10–13. §8 error handling → try/except in Tasks 9/11 + Task 14 Step 2. §9 testing → Phase 1 unit tests + Tasks 1/14. §11 open items → Task 1.
 - **Elite-system feasibility risk** is gated explicitly in Task 1's STOP note.
 - **Type consistency:** `VehicleSnapshot`/`Tick`/`ResearchProgressModel` field names are defined once in Task 3 and used unchanged in Tasks 4–11.
+
+## Phase 1 review follow-ups (carry into Phase 2)
+
+Surfaced by the final whole-layer review after Tasks 2–8 (domain layer) shipped and passed (23 tests):
+
+1. **Maxed-out elite vehicle rendering (PRODUCT DECISION needed before Task 12).** Under "remaining only," a fully-maxed elite vehicle (all milestones incl. the cap reached) yields no remaining ticks and a degenerate `scale_min == scale_max` range; if earned XP exceeds the cap threshold, `scale_min > cap` too. The domain layer correctly reports "nothing remaining"; the **view** must decide how to render it (full/complete bar, hide the bar, or clamp the fill). Ask the user when building Task 12.
+2. **Snapshot contract for the adapter (Task 9):** the engine adapter MUST supply real ints for all XP fields (no `None`) and lists in natural progression order. The domain layer does no coercion and will raise on `None`; per spec §8, guard each read in the adapter (try/except → safe default) so one unreadable system degrades gracefully.
+3. **`prereqs_met` / `completed` fields:** currently unused by resolvers. Decide during Task 12 whether locked-but-affordable items (prereqs unmet) or completed items should be visually distinct; if not, drop `prereqs_met` from the contract.
