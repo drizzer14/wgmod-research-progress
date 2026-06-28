@@ -5,14 +5,23 @@ EU-vs-RU client correction. Read tools/dev/README.md for the dev loop._
 
 ## TL;DR — where we are
 The mod **works in-game** on WoT **EU 2.3.0.1**. A research-progress bar renders in
-the Garage from live data: tech-tree (green vehicle-XP fill + yellow ticks),
-field-modifications (purple ticks), and a "Fully researched" complete state — all
-verified via the debug REPL + visually.
+the Garage from live data: tech-tree, field-modifications, and a "Fully researched"
+complete state. Live refresh on tank-switch is verified, including the battle-exit
+cycle (the listener self-heals — see gotchas). Locked/prereqs-unmet ticks are done
+and verified. (Current HEAD: `a91b0d4`.)
 
-**Live refresh is now VERIFIED** (incl. the battle-exit cycle): garage → switch
-tanks → play a battle → exit → switch tanks again, all firing `[wgmod] onChanged
--> refresh ok=True`. (Current HEAD: `c54ac37`.) The next step is the remaining v1
-work below — start with the owner-requested locked/prereqs-unmet ticks (item 2).
+**IMMEDIATE NEXT STEP (do first):** the native-Gameface restyle (`a91b0d4`) is
+committed and **deployed** but **NOT yet visually verified in-game** — the deploy
+happened at end of session after the client closed. Relaunch and confirm in the
+hangar:
+- Bar uses the game font and colors (see `research/gameface-design-tokens.md`):
+  green vehicle-XP fill, tan free-XP segment, **bright near-white** affordable
+  ticks, **dim gray** locked ticks, full **green** bar when "Fully researched".
+- Sanity-check that the `var(--color-*)` tokens actually resolve in the hangar
+  document (if a token were out of scope the hex fallback kicks in, so it should
+  look right regardless — but confirm the green/tan/white/gray read as intended).
+- If any color reads wrong against the live hangar, tweak `WGModResearch.css`
+  (owner already chose: locked=gray, vehicle fill=green).
 
 ## Architecture (as built, EU 2.3)
 - **Domain (engine-free, tested):** `wgmod_research/domain` — `VehicleSnapshot` →
@@ -52,17 +61,25 @@ docs/superpowers/research/decompiled-findings.md   # verified EU symbols
 ```
 
 ## Remaining v1 work
-1. **Verify live refresh** (immediate, above) and the full mode matrix (graceful
-   degradation if a read fails).
-2. **Visual polish** (Task: design system): game Gameface fonts/colors; real hover
-   **tooltips** (name + XP); category **icons**; position/size.
+1. **Verify the native restyle in-game** (immediate, see TL;DR) and the full mode
+   matrix (graceful degradation if a read fails).
+2. **Visual polish** (Task: design system).
    - DONE (`7d3fe8c`, verified in-game on the Lago): locked (prereqs-unmet) ticks.
-     `UnlockItem.prereqs_met` → `Tick.locked` → `TickVM "locked"` → JS `wg-locked`
-     (muted gray, overrides category + affordable). Field mods carry no prereq info
-     so stay unlocked.
+     `UnlockItem.prereqs_met` → `Tick.locked` → `TickVM "locked"` → JS `wg-locked`.
+     Field mods carry no prereq info so stay unlocked.
+   - DONE (`a91b0d4`, deployed, pending visual check): native Gameface fonts/colors
+     via `:root` design tokens. See `research/gameface-design-tokens.md` for the full
+     token table + mapping. Tick color is now state-driven (affordable / locked /
+     idle), not category-driven — a bar is all-tech-tree OR all-field-mods, so the
+     label already disambiguates and per-tick category color was redundant.
    - Owner DROPPED the "stable full-scale / completed-base bar" idea (ticks staying
      put as you progress); keep the current remaining-only view. Don't revisit unless
      re-raised.
+   - STILL TODO: real hover **tooltips** (name + XP) — blocked by `pointer-events:
+     none` on the root; either enable pointer events on ticks (watch for stealing
+     clicks from the 3-D hangar) or wire WoT's ViewModel tooltip manager. Also fixes
+     the empty field-mod tick names (see gotcha). Category **icons**; final
+     **position/size** tuning against the live hangar.
 3. **Finalize packaging & docs** (Task): `meta.xml` name/id (consider
    `com.drizzer14.research_progress` / "Research Progress"); declare OpenWG Gameface
    as a required dependency in README; deprecate `build/deploy_dev.py` (loose
