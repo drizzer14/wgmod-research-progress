@@ -1,0 +1,15 @@
+/* WGMod research-progress widget styles. Sizing in rem (engine scales root font). */
+#wgmod-test {
+    position: fixed;
+    top: 90rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 99999;
+    padding: 8rem 18rem;
+    background: rgba(20, 20, 20, 0.85);
+    color: #ffd24a;
+    font-size: 18rem;
+    border: 1rem solid #ffd24a;
+    border-radius: 4rem;
+    pointer-events: none;
+}

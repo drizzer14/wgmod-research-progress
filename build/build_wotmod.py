@@ -47,7 +47,9 @@ def _read_meta():
 
 def _compile_tree(src_root, out_root):
     """Copy res/ to out_root, compiling .py -> .pyc and dropping the .py."""
-    for dirpath, _dirs, files in os.walk(src_root):
+    for dirpath, dirs, files in os.walk(src_root):
+        # Never ship dev/build artifacts: Python 3 __pycache__ from pytest, etc.
+        dirs[:] = [d for d in dirs if d != "__pycache__"]
         rel = os.path.relpath(dirpath, src_root)
         target_dir = os.path.join(out_root, rel) if rel != "." else out_root
         if not os.path.isdir(target_dir):
@@ -57,6 +59,8 @@ def _compile_tree(src_root, out_root):
             if name.endswith(".py"):
                 pyc = os.path.join(target_dir, name + "c")  # foo.py -> foo.pyc
                 py_compile.compile(src_file, cfile=pyc, doraise=True)
+            elif name.endswith(".pyc"):
+                continue  # skip stray/foreign bytecode; we compile fresh from .py
             else:
                 shutil.copy2(src_file, os.path.join(target_dir, name))
 

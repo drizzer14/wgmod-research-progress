@@ -1,48 +1,47 @@
 # -*- coding: utf-8 -*-
+"""WGMod research-progress bar — entry point.
+
+Loaded by the WoT mod loader from a packaged .wotmod at client startup.
+STAGE 1: inject a static test widget into the hangar via OpenWG Gameface, to
+confirm the mount path. Data wiring (adapter -> domain -> ViewModel) follows.
+
+Target runtime: Python 2.7 (BigWorld). OpenWG Gameface is a hard dependency.
 """
-WGMod — entry point.
-
-Files matching `mod_*.py` placed in scripts/client/gui/mods/ are imported by
-the game's mod loader at client startup (alphabetical order). The import side
-effects below are what "install" the mod's behavior.
-
-Target runtime: Python 2.7 (BigWorld). Keep this 2.7-compatible.
-"""
-from __future__ import print_function
-
 from debug_utils import LOG_NOTE, LOG_CURRENT_EXCEPTION
 
-MOD_NAME = "WGMod"
+MOD_NAME = "Research Progress"
 MOD_VERSION = "0.1.0"
+WIDGET_NAME = "WGModResearch"
+COUI = "coui://gui/gameface/mods/drizzer14/WGModResearch"
 
 
-def _init():
-    """Called once when the module is imported by the mod loader."""
-    LOG_NOTE("[{0}] loaded v{1}".format(MOD_NAME, MOD_VERSION))
-    _install_hooks()
+def _install():
+    import openwg_gameface
+    from gui.impl.lobby.hangar.random import random_hangar
+
+    RH = random_hangar.RandomHangar
+    if getattr(RH, "_wgmod_patched", False):
+        return
+
+    _orig_onLoading = RH._onLoading
+
+    def _onLoading(self, *args, **kwargs):
+        _orig_onLoading(self, *args, **kwargs)
+        try:
+            openwg_gameface.gf_mod_inject(
+                self.getViewModel(), WIDGET_NAME,
+                styles=[COUI + "/WGModResearch.css"],
+                scripts=[COUI + "/WGModResearch.js"])
+            LOG_NOTE("[%s] injected widget assets into hangar" % MOD_NAME)
+        except Exception:
+            LOG_CURRENT_EXCEPTION()
+
+    RH._onLoading = _onLoading
+    RH._wgmod_patched = True
+    LOG_NOTE("[%s] v%s hangar patch installed" % (MOD_NAME, MOD_VERSION))
 
 
-def _install_hooks():
-    """
-    Install behavior by monkey-patching game classes.
-
-    The standard pattern: keep a reference to the original method, replace it
-    with your own, and call the original from inside yours so you extend rather
-    than break stock behavior. Example (guarded so a class/signature change in
-    a future patch can't crash the client):
-
-        from gui.Scaleform.daapi.view.lobby.hangar.Hangar import Hangar
-
-        _orig_populate = Hangar._populate
-        def _patched_populate(self):
-            _orig_populate(self)            # run stock behavior first
-            LOG_NOTE("[{0}] hangar populated".format(MOD_NAME))
-        Hangar._populate = _patched_populate
-    """
-    try:
-        pass  # TODO: add real hooks here
-    except Exception:
-        LOG_CURRENT_EXCEPTION()
-
-
-_init()
+try:
+    _install()
+except Exception:
+    LOG_CURRENT_EXCEPTION()
