@@ -18,9 +18,13 @@ class Mode(object):
 
 class Tick(object):
     def __init__(self, xp_position, category, icon, name,
-                 xp_gained, xp_required, affordable, completed, locked=False):
+                 xp_gained, xp_required, affordable, completed, locked=False,
+                 level=0):
         self.xp_position = xp_position
-        self.category = category          # techtree | fieldmod
+        # vehicle | module (tech-tree unlock kind) | fieldmod. Drives the
+        # per-tick glyph in the view (a bar is all-tech-tree or all-field-mods,
+        # so within tech-tree this distinguishes the next-tank tick from modules).
+        self.category = category
         self.icon = icon
         self.name = name
         self.xp_gained = xp_gained
@@ -30,6 +34,9 @@ class Tick(object):
         # True = prerequisites not yet met, so this item can't be researched yet
         # even if affordable (only meaningful for tech-tree unlocks).
         self.locked = locked
+        # Field-modification level (1..N) -> the roman numeral shown in the
+        # hexagon glyph. 0 for non-field-mod ticks.
+        self.level = level
 
 
 class UnlockItem(object):
@@ -46,12 +53,13 @@ class UnlockItem(object):
 
 class ProgressionStep(object):
     """A field-modification step (post-progression tree node, paid with XP)."""
-    def __init__(self, step_id, name, icon, xp_cost, unlocked):
+    def __init__(self, step_id, name, icon, xp_cost, unlocked, level=0):
         self.step_id = step_id
         self.name = name
         self.icon = icon
         self.xp_cost = xp_cost
         self.unlocked = unlocked          # already received/earned
+        self.level = level                # field-mod level (1..N) -> roman numeral
 
 
 class VehicleSnapshot(object):
@@ -62,23 +70,34 @@ class VehicleSnapshot(object):
     progression order.
     """
     def __init__(self, tier, is_elite, vehicle_xp, free_xp,
-                 tech_unlocks=None, field_mod_steps=None):
+                 tech_unlocks=None, field_mod_steps=None,
+                 fieldmods_done=0, fieldmods_total=0, vehicle_class=""):
         self.tier = tier                          # 1..11
         self.is_elite = is_elite                  # True = fully researched
         self.vehicle_xp = vehicle_xp              # unspent accumulated vehicle XP
         self.free_xp = free_xp                    # global free XP
         self.tech_unlocks = tech_unlocks or []    # [UnlockItem]
         self.field_mod_steps = field_mod_steps or []   # [ProgressionStep]
+        # Researched / total field-mod LEVELS within the tier cap -> the header
+        # counter (multi-mod choice slots are not counted).
+        self.fieldmods_done = fieldmods_done
+        self.fieldmods_total = fieldmods_total
+        # vehicle class id ('mediumTank' etc.) for the elite badge in COMPLETE.
+        self.vehicle_class = vehicle_class
 
 
 class ResearchProgressModel(object):
     """Output of build_model(). Fill is two stacked segments (vehicle XP, then
     free XP); the view draws fill_vehicle first and fill_free on top."""
     def __init__(self, mode, scale_min, scale_max,
-                 fill_vehicle, fill_free, ticks):
+                 fill_vehicle, fill_free, ticks,
+                 fieldmods_done=0, fieldmods_total=0, vehicle_class=""):
         self.mode = mode
         self.scale_min = scale_min
         self.scale_max = scale_max
         self.fill_vehicle = fill_vehicle       # first stacked segment (vehicle XP)
         self.fill_free = fill_free             # second stacked segment (free XP)
         self.ticks = ticks                     # [Tick], ordered by xp_position
+        self.fieldmods_done = fieldmods_done   # researched/total field-mod levels
+        self.fieldmods_total = fieldmods_total
+        self.vehicle_class = vehicle_class     # for the elite badge in COMPLETE

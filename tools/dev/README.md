@@ -19,6 +19,21 @@ Loose `res_mods\<version>\scripts` does **not** load in 2.3, and `res_mods` outr
 ```
 `deploy_wotmod.py` auto-cleans old `com.drizzer14.wgmod_[0-9]*.wotmod` and loose leftovers.
 
+### Hot-reload loop for JS/CSS-only changes (NO relaunch)
+`coui://gui/...` resolves through a merged FS where `res_mods/<version>/` outranks
+the `.wotmod`, and the hangar sub-view re-fetches our assets each time its document
+is rebuilt. So for **visual-only** (WGModResearch.js/.css) iteration:
+```
+# client may stay running:
+& "<py3>" tools\dev\sync_gameface.py "D:\Games\World_of_Tanks_EU" 2.3.0.1
+# then in-game: switch to another screen (e.g. Tech Tree) and back to the Garage.
+```
+This is ONLY for front-end assets. Python (mount/data) changes still need
+build+deploy+relaunch. **Caveats:** after every `deploy_wotmod.py`, re-run
+`sync_gameface.py` (else the stale overlay shadows the fresh package); and **remove
+the overlay** (`res_mods\2.3.0.1\gui\gameface\mods\drizzer14\`) before a clean
+ship-verification so you're testing the packaged assets.
+
 Unit tests (engine-free domain layer, Python 3):
 ```
 & "$env:LOCALAPPDATA\Programs\Python\Python313\python.exe" -m pytest -q   # expect green

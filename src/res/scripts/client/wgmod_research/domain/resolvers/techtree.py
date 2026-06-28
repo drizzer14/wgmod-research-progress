@@ -11,8 +11,10 @@ def resolve(snapshot):
     running = 0
     for u in remaining:
         running += u.xp_cost
+        # category carries the unlock kind ('vehicle' | 'module') so the view can
+        # draw a distinct glyph for the next-tank tick vs module ticks.
         ticks.append(t.Tick(
-            xp_position=running, category="techtree", icon=u.icon, name=u.name,
+            xp_position=running, category=u.kind, icon=u.icon, name=u.name,
             xp_gained=0, xp_required=u.xp_cost,
             affordable=(running <= spendable), completed=False,
             locked=not u.prereqs_met))

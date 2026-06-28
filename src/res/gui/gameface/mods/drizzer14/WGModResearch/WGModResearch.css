@@ -1,16 +1,41 @@
-/* WGMod research-progress bar. Styled with WoT's native Gameface design tokens
-   (defined on :root in mono/dialogs/lib/lib.css) so it inherits the game's
-   fonts, colors and shadows. Sizing in rem (engine scales the root font). */
+/* WGMod research-progress bar. Uses WoT's native Gameface palette by VALUE
+   (PFDINMax font + the hex from gameface-design-tokens.md). We intentionally do
+   NOT use `var(--color-*)` custom properties: Gameface's CSS engine drops a
+   declaration whole when it can't resolve a var() (it ignores the hex fallback),
+   which rendered every colored element invisible (the bar read as black). Sizing
+   in rem (engine scales the root font). */
 #wgmod-root {
     position: fixed;
     left: 50%;
-    bottom: 120rem;
+    top: 190rem;                /* just below the hangar vehicle name/XP header */
     transform: translateX(-50%);
     width: 520rem;
     z-index: 9000;
     font-family: "PFDINMax", sans-serif;
-    color: var(--color-general-primary, #ede6d9);
+    color: #ede6d9;
     pointer-events: none;
+}
+
+#wgmod-root .wg-head {
+    position: relative;
+    display: flex;
+    align-items: center;
+    margin-bottom: 5rem;
+}
+
+/* category icon (Research / Field Modifications) -- the in-game Vehicle-
+   management menu art (64x64 square). Positioned OUTBOARD to the left of the
+   bar so the label text lines up with the track's left edge. */
+#wgmod-root .wg-cat-icon {
+    position: absolute;
+    left: -35rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34rem;
+    height: 34rem;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
 }
 
 #wgmod-root .wg-label {
@@ -18,9 +43,19 @@
     font-weight: 700;
     letter-spacing: 1rem;
     text-transform: uppercase;
-    margin-bottom: 5rem;
-    color: var(--color-general-secondary, #b2afab);
-    text-shadow: var(--hangar-highlight-shadow, 0 1rem 3rem rgba(0, 0, 0, 0.8));
+    color: #b2afab;
+    text-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.8);
+}
+
+/* upgrades count (pick-one field-mod steps) -- inline with the heading, e.g.
+   "FIELD MODIFICATIONS 2/5", in the currency tan. */
+#wgmod-root .wg-upgrades {
+    margin-left: 8rem;
+    font-size: 13rem;
+    font-weight: 700;
+    letter-spacing: 1rem;
+    color: #ecca9d;
+    text-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.8);
 }
 
 #wgmod-root .wg-track {
@@ -40,17 +75,17 @@
 /* vehicle (combat) XP fills in the native "done" green -- WoT's own XP-progress
    color -- then free XP stacks on top in its native currency tan. */
 #wgmod-root .wg-fill-veh {
-    background: var(--color-status-done, #64ba21);
+    background: #64ba21;
     opacity: 1;
 }
 #wgmod-root .wg-fill-free {
-    background: var(--color-currency-free-experience, #ecca9d);
+    background: #ecca9d;
     opacity: 0.92;
 }
 
 /* COMPLETE state: a full bar in the native "done" green. */
 #wgmod-root.wg-complete .wg-fill-veh {
-    background: var(--color-status-done, #64ba21);
+    background: #64ba21;
     opacity: 1;
 }
 
@@ -71,7 +106,7 @@
     bottom: 0;
     width: 2rem;
     margin-left: -1rem;
-    background: var(--color-general-secondary, #b2afab);
+    background: #b2afab;
     opacity: 0.7;
     box-shadow: 0 0 1rem rgba(0, 0, 0, 0.7);          /* keep edges defined */
 }
@@ -81,7 +116,7 @@
 #wgmod-root .wg-tick.wg-aff {
     width: 3rem;
     margin-left: -1.5rem;
-    background: var(--color-general-primary, #ede6d9);
+    background: #ede6d9;
     opacity: 1;
     box-shadow: 0 0 4rem rgba(255, 255, 255, 0.7);
 }
@@ -91,7 +126,56 @@
 #wgmod-root .wg-tick.wg-locked {
     width: 2rem;
     margin-left: -1rem;
-    background: var(--color-general-tertiary, #8e867d);
+    background: #8e867d;
     opacity: 0.45;
     box-shadow: 0 0 1rem rgba(0, 0, 0, 0.7);
+}
+
+/* Category icon (real in-game art) hangs centered below each tick. Rendered via
+   background-size:contain so the engine scales the source to fit the box while
+   preserving aspect (Gameface clips an <img> instead of scaling it). One box
+   fits both shapes: square module glyphs (48x48) letterbox to 24x24 centered;
+   wide vehicle contours (124x31, ~4:1) fit the full width. translateX(-50%)
+   centers on the tick; rem scales with the engine root font. */
+#wgmod-root .wg-tick-img {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    margin-top: 4rem;
+    transform: translateX(-50%);
+    width: 96rem;
+    height: 24rem;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+}
+/* vehicle (next-tank) uses the framed tech-tree icon (~160x100, 1.6:1) -- give
+   it a larger box so the tank reads, contain keeps it fully framed. */
+#wgmod-root .wg-cat-vehicle .wg-tick-img {
+    width: 45rem;
+    height: 28rem;
+}
+
+/* field-mod ticks: a hexagon glyph (clip-path) holding the level roman numeral,
+   hung below the tick like the icons. Tan fill mirrors the in-game field-mod
+   level badges; the parent tick's opacity dims not-yet-affordable levels. */
+#wgmod-root .wg-tick-hex {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    margin-top: 4rem;
+    transform: translateX(-50%);
+    width: 18rem;
+    height: 20rem;
+    background: #ecca9d;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#wgmod-root .wg-tick-hex span {
+    font-family: "PFDINMax", sans-serif;
+    font-size: 9rem;
+    font-weight: 700;
+    color: #1a1a1a;
 }

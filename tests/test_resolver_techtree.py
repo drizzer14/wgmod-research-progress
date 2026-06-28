@@ -3,9 +3,9 @@ from wgmod_research.domain import types as t
 from wgmod_research.domain.resolvers import techtree
 
 
-def _unlock(cd, cost, researched=False, prereqs_met=True):
+def _unlock(cd, cost, researched=False, prereqs_met=True, kind="module"):
     return t.UnlockItem(int_cd=cd, name="i%d" % cd, icon="i%d.png" % cd,
-                        xp_cost=cost, kind="module",
+                        xp_cost=cost, kind=kind,
                         researched=researched, prereqs_met=prereqs_met)
 
 
@@ -29,7 +29,16 @@ def test_affordable_against_spendable():
     ticks = techtree.resolve(snap)
     # 600 affordable (<=1500), 2600 not
     assert [tk.affordable for tk in ticks] == [True, False]
-    assert all(tk.category == "techtree" for tk in ticks)
+
+
+def test_category_reflects_unlock_kind():
+    snap = t.VehicleSnapshot(
+        tier=10, is_elite=False, vehicle_xp=0, free_xp=0,
+        tech_unlocks=[_unlock(1, 600, kind="module"),
+                      _unlock(2, 2000, kind="vehicle")])  # next-tank unlock
+    ticks = techtree.resolve(snap)
+    # ordered by cost: module tick first, vehicle tick second
+    assert [tk.category for tk in ticks] == ["module", "vehicle"]
 
 
 def test_locked_reflects_prereqs_met():

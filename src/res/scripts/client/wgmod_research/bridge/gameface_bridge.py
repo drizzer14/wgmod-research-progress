@@ -64,7 +64,7 @@ def install_vehicle_listener():
 
 
 class TickVM(ViewModel):
-    def __init__(self, properties=6, commands=0):
+    def __init__(self, properties=8, commands=0):
         super(TickVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -75,6 +75,8 @@ class TickVM(ViewModel):
         self._addStringProperty("name", "")      # 3
         self._addBoolProperty("affordable", False)  # 4
         self._addBoolProperty("locked", False)   # 5
+        self._addStringProperty("icon", "")      # 6 (img:// URL, may be empty)
+        self._addNumberProperty("level", 0)      # 7 (field-mod level -> roman)
 
     def setPosition(self, v):
         self._setNumber(0, v)
@@ -94,9 +96,15 @@ class TickVM(ViewModel):
     def setLocked(self, v):
         self._setBool(5, v)
 
+    def setIcon(self, v):
+        self._setString(6, v)
+
+    def setLevel(self, v):
+        self._setNumber(7, v)
+
 
 class ResearchVM(ViewModel):
-    def __init__(self, properties=6, commands=0):
+    def __init__(self, properties=9, commands=0):
         super(ResearchVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -107,6 +115,9 @@ class ResearchVM(ViewModel):
         self._addNumberProperty("fillVehicle", 0)  # 3
         self._addNumberProperty("fillFree", 0)     # 4
         self._addArrayProperty("ticks", Array())   # 5
+        self._addNumberProperty("fieldModsDone", 0)   # 6
+        self._addNumberProperty("fieldModsTotal", 0)  # 7
+        self._addStringProperty("vehicleClass", "")  # 8 (for elite badge)
 
     def setMode(self, v):
         self._setString(0, v)
@@ -125,6 +136,15 @@ class ResearchVM(ViewModel):
 
     def getTicks(self):
         return self._getArray(5)
+
+    def setFieldModsDone(self, v):
+        self._setNumber(6, v)
+
+    def setFieldModsTotal(self, v):
+        self._setNumber(7, v)
+
+    def setVehicleClass(self, v):
+        self._setString(8, v)
 
     @staticmethod
     def getTicksType():
@@ -175,6 +195,9 @@ def push(rvm, host_vm=None):
             tx.setScaleMax(model.scale_max)
             tx.setFillVehicle(model.fill_vehicle)
             tx.setFillFree(model.fill_free)
+            tx.setFieldModsDone(model.fieldmods_done)
+            tx.setFieldModsTotal(model.fieldmods_total)
+            tx.setVehicleClass(model.vehicle_class or "")
             arr = tx.getTicks()
             arr.clear()
             for t in model.ticks:
@@ -185,6 +208,8 @@ def push(rvm, host_vm=None):
                 tv.setName(t.name or "")
                 tv.setAffordable(bool(t.affordable))
                 tv.setLocked(bool(t.locked))
+                tv.setIcon(t.icon or "")
+                tv.setLevel(t.level or 0)
                 arr.addViewModel(tv)
             arr.invalidate()
         # Nudge the host sub-view so its data re-syncs to JS (nested-model

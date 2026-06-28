@@ -1,27 +1,39 @@
 # Session Handoff — Research-Progress Bar (Phase 2, in-game working)
 
-_Date: 2026-06-28. Supersedes the original PHASE2-HANDOFF.md, which predates the
-EU-vs-RU client correction. Read tools/dev/README.md for the dev loop._
+_Updated 2026-06-28 (icons + field-mod session). Read tools/dev/README.md for the
+dev loop — note the NEW hot-reload loop for JS/CSS-only changes._
 
 ## TL;DR — where we are
-The mod **works in-game** on WoT **EU 2.3.0.1**. A research-progress bar renders in
-the Garage from live data: tech-tree, field-modifications, and a "Fully researched"
-complete state. Live refresh on tank-switch is verified, including the battle-exit
-cycle (the listener self-heals — see gotchas). Locked/prereqs-unmet ticks are done
-and verified. (Current HEAD: `a91b0d4`.)
+The mod **works in-game** on WoT **EU 2.3.0.1**. The Garage bar renders from live
+data in all modes (tech-tree / field-mods / "Fully researched"), refreshes on
+tank-switch (listener self-heals across the battle-exit cycle — see gotchas), and
+now uses **real in-game icons**:
+- **tech-tree module ticks** → the generic module-type glyph (chassis/engine/
+  tower/gun/radio), **vehicle ticks** → the framed tech-tree-node tank icon.
+- **field-mod ticks** → a hexagon with the level **roman numeral** (clip-path).
+- **header category icon** (outboard left of the bar) → Research / Field
+  Modifications icons from the in-game Vehicle-management menu.
+- **field-mod counter** in the header → "FIELD MODIFICATIONS N/M" = researched /
+  total field-mod LEVELS, clamped to the tier cap.
+- **COMPLETE state** → class+elite badge (e.g. `mediumTank_elite.png`).
 
-**IMMEDIATE NEXT STEP (do first):** the native-Gameface restyle (`a91b0d4`) is
-committed and **deployed** but **NOT yet visually verified in-game** — the deploy
-happened at end of session after the client closed. Relaunch and confirm in the
-hangar:
-- Bar uses the game font and colors (see `research/gameface-design-tokens.md`):
-  green vehicle-XP fill, tan free-XP segment, **bright near-white** affordable
-  ticks, **dim gray** locked ticks, full **green** bar when "Fully researched".
-- Sanity-check that the `var(--color-*)` tokens actually resolve in the hangar
-  document (if a token were out of scope the hex fallback kicks in, so it should
-  look right regardless — but confirm the green/tan/white/gray read as intended).
-- If any color reads wrong against the live hangar, tweak `WGModResearch.css`
-  (owner already chose: locked=gray, vehicle fill=green).
+⚠️ **Changes from this session are on the working tree but NOT committed** — commit
+them at the start of next session (or ask the owner). Tests green (23, py3),
+2.7-compiles clean.
+
+**IMMEDIATE NEXT STEPS:**
+1. **Tier XI field-mod level cap is UNKNOWN and currently guessed.** `max_level()`
+   in `domain/resolvers/fieldmods.py` maps tier≥10→8, so tier **XI also gets 8**,
+   which is unverified. The owner has no non-fully-upgraded tier-XI tank to read it
+   live, so get the real cap from elsewhere: the EU **decompiled** post-progression
+   config (`post_progression*`/vehicle XML — re-clone branch `2.3`, see
+   tools/dev/README.md) or the WoT wiki. Confirmed caps so far: **VI–VII=5,
+   VIII=6, IX=7, X=8**.
+2. **Visually verify the elite badge** on a fully-maxed (all field-mods done) tank —
+   not yet seen in-game (no maxed tank was loaded at handoff). It's the COMPLETE
+   state: `img://gui/maps/icons/vehicleTypes/md/<class>_elite.png` ('-'→'_').
+3. **Confirm the field-mod counter** reads N/8 (tier 10) and N/5 (tier 6) in-game —
+   deployed at handoff but the owner moved to handoff before reporting back.
 
 ## Architecture (as built, EU 2.3)
 - **Domain (engine-free, tested):** `wgmod_research/domain` — `VehicleSnapshot` →
@@ -61,32 +73,81 @@ docs/superpowers/research/decompiled-findings.md   # verified EU symbols
 ```
 
 ## Remaining v1 work
-1. **Verify the native restyle in-game** (immediate, see TL;DR) and the full mode
-   matrix (graceful degradation if a read fails).
-2. **Visual polish** (Task: design system).
-   - DONE (`7d3fe8c`, verified in-game on the Lago): locked (prereqs-unmet) ticks.
-     `UnlockItem.prereqs_met` → `Tick.locked` → `TickVM "locked"` → JS `wg-locked`.
-     Field mods carry no prereq info so stay unlocked.
-   - DONE (`a91b0d4`, deployed, pending visual check): native Gameface fonts/colors
-     via `:root` design tokens. See `research/gameface-design-tokens.md` for the full
-     token table + mapping. Tick color is now state-driven (affordable / locked /
-     idle), not category-driven — a bar is all-tech-tree OR all-field-mods, so the
-     label already disambiguates and per-tick category color was redundant.
-   - Owner DROPPED the "stable full-scale / completed-base bar" idea (ticks staying
-     put as you progress); keep the current remaining-only view. Don't revisit unless
-     re-raised.
+1. **Tier XI field-mod cap** (see TL;DR #1) + **elite-badge visual verify** (#2) +
+   **counter confirm** (#3).
+2. **Visual polish** — mostly DONE this session (all hot-reloadable for further
+   tuning; see the dev loop):
+   - DONE: locked (prereqs-unmet) tech-tree ticks (gray). Field mods carry no
+     prereq info so stay unlocked.
+   - DONE: colors. Uses **literal hex** from `research/gameface-design-tokens.md`
+     (NOT `var(--color-*)` — Gameface drops the whole declaration on an
+     unresolved var, which is what made the bar render black; see gotcha). Tick
+     color is state-driven (affordable / locked / idle).
+   - DONE: **real in-game icons** (img:// loads in our injected doc). Module &
+     vehicle ticks, header category icon, field-mod roman-numeral hexagons, elite
+     badge. Icon paths + sizing in the "Icons" section below.
+   - DONE: **field-mod level tier cap** + **researched/total counter**.
+   - Owner DROPPED the "stable full-scale / completed-base bar" idea; keep the
+     remaining-only view. Don't revisit unless re-raised.
    - STILL TODO: real hover **tooltips** (name + XP) — blocked by `pointer-events:
      none` on the root; either enable pointer events on ticks (watch for stealing
-     clicks from the 3-D hangar) or wire WoT's ViewModel tooltip manager. Also fixes
-     the empty field-mod tick names (see gotcha). Category **icons**; final
-     **position/size** tuning against the live hangar.
-3. **Finalize packaging & docs** (Task): `meta.xml` name/id (consider
+     clicks from the 3-D hangar) or wire WoT's ViewModel tooltip manager. Also
+     fixes the empty field-mod tick names (see gotcha). Final **position/size**
+     tuning against the live hangar (current: `top: 190rem`).
+3. **Finalize packaging & docs** (Task): remove the loose `res_mods` gameface
+   overlay before a clean ship verification (it shadows the packaged assets — see
+   gotcha); `meta.xml` name/id (consider
    `com.drizzer14.research_progress` / "Research Progress"); declare OpenWG Gameface
    as a required dependency in README; deprecate `build/deploy_dev.py` (loose
    res_mods does not load in 2.3) pointing to `deploy_wotmod.py`; document the debug
    mod; build the distributable.
 
+## Icons & field-mods (this session — verified in-game)
+Data flow: `engine_adapter` reads icon URLs + field-mod levels → domain `Tick`
+(`icon`, `level`, `category`) and `ResearchProgressModel` (`fieldmods_done/total`,
+`vehicle_class`) → `TickVM`/`ResearchVM` → JS renders.
+
+- **Tech-tree tick `category` carries the unlock kind** (`"vehicle"` | `"module"`),
+  not a generic `"techtree"`. JS adds `wg-cat-<category>`.
+- **Icon URLs (img://), read off the live item objects:**
+  - module unlock → `item.icon` = generic module-type glyph,
+    `img://gui/maps/icons/modules/{chassis,engine,tower,gun,radio}.png` (48×48).
+  - vehicle unlock → `item.icon` = framed tech-tree-node icon (~160×100). **NOT
+    `iconSmall`** (124×31 carousel contour — cropped edge-to-edge, looks "cut off").
+  - header category → `img://gui/maps/icons/hangar/vehicleMenu/large/{research,
+    fieldModification}.png` (64×64), keyed by mode in JS (`CAT_ICON`).
+  - elite badge (COMPLETE) → `img://gui/maps/icons/vehicleTypes/md/<class>_elite.png`
+    — pre-composed class+elite art; map `veh.type` '-'→'_' (`AT-SPG`→`AT_SPG`).
+- **Render icons as `background-image` + `background-size:contain`** on a div, NOT
+  `<img>` — Gameface ignores `object-fit` and CLIPS an `<img>` to its box (and
+  `width:auto` collapses to 0). background-size:contain scales aspect-correct.
+- **Field mods (post-progression), read via `veh.postProgression.iterOrderedSteps()`:**
+  each step has `getLevel()` (1..N → roman numeral), `isReceived()`, `getPrice().xp`,
+  and a typed `action`. Two kinds: **leveled mods** (`FeatureModItem`/`SimpleModItem`/
+  `RoleSlotModItem`, cost `price.xp`, one per level → hexagon ticks) and **multi-mod
+  choice slots** (`MultiModsItem`, `price.xp==0` → excluded from bar AND counter).
+  The tree always lists **8 levels + 5 multi-mods regardless of tier**; only the
+  per-level XP scales (T6 3500 / T8 11500 / T10 28000). Clamp to the tier cap:
+  `max_level(tier)` (VI–VII=5, VIII=6, IX=7, X+=8 — **XI unverified**).
+- **Counter** = researched / total LEVELED field mods within the cap (`fieldmods_done
+  / fieldmods_total`); multi-mods are not counted.
+
 ## Gotchas / lessons (don't relearn these)
+- **Gameface drops a whole CSS declaration on an unresolved `var()`** — it does NOT
+  honor the hex fallback in `var(--x, #hex)`. Every color was a `var()`, so the bar
+  rendered black. Fix: literal hex only. Custom properties are effectively unusable
+  in our injected document.
+- **Gameface ignores `object-fit` and clips `<img>` to its box; `width:auto`→0.**
+  Use a div with `background-size:contain`. `clip-path: polygon(...)` DOES work
+  (the field-mod hexagons use it).
+- **Hot-reload loop for JS/CSS-only changes (no relaunch):** `tools/dev/
+  sync_gameface.py "<install>" 2.3.0.1` copies the gameface assets into the
+  `res_mods` overlay, then in-game switch to another screen and back to the Garage —
+  the hangar sub-view document re-fetches them. Python (mount/data) changes still
+  need build+deploy+relaunch via `deploy_wotmod.py`. **After every `deploy_wotmod`,
+  re-run `sync_gameface`** or the (now stale) overlay shadows the fresh package.
+  **Remove the overlay before a clean ship-verification** (`res_mods/2.3.0.1/gui/
+  gameface/mods/drizzer14/`).
 - **Wrong client trap:** the StranikS-Scan default branch is **MirTankov/Lesta RU**,
   a different client (it has "Paragons", lacks `RandomHangar`). Use branch **`2.3`**
   (EU). "Paragons / elite milestones / level-150" do **not** exist in EU — the elite

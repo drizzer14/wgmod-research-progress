@@ -21,21 +21,28 @@ def _max_pos(ticks, default):
 def build_model(snapshot):
     fill_vehicle = snapshot.vehicle_xp
     fill_free = snapshot.free_xp
+    fm_done = snapshot.fieldmods_done
+    fm_total = snapshot.fieldmods_total
+    veh_class = snapshot.vehicle_class
 
     if not snapshot.is_elite:
         ticks = techtree.resolve(snapshot)
         return t.ResearchProgressModel(
             mode=t.Mode.TECH_TREE, scale_min=0, scale_max=_max_pos(ticks, 0),
-            fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=ticks)
+            fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=ticks,
+            vehicle_class=veh_class)
 
-    # elite = fully researched: show remaining Field Modifications ("upgrades").
+    # elite = fully researched: show remaining Field Modifications, plus the
+    # researched/total field-mod-level counter in the header.
     fm_ticks = fieldmods.resolve(snapshot)
     if fm_ticks:
         return t.ResearchProgressModel(
             mode=t.Mode.FIELD_MODS, scale_min=0, scale_max=_max_pos(fm_ticks, 0),
-            fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=fm_ticks)
+            fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=fm_ticks,
+            fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class)
 
-    # nothing left to research or upgrade.
+    # nothing left to research: COMPLETE (elite badge in the view).
     return t.ResearchProgressModel(
         mode=t.Mode.COMPLETE, scale_min=0, scale_max=0,
-        fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=[])
+        fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=[],
+        fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class)

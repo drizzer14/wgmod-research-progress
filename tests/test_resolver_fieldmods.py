@@ -3,9 +3,9 @@ from wgmod_research.domain import types as t
 from wgmod_research.domain.resolvers import fieldmods
 
 
-def _step(sid, cost, unlocked=False):
+def _step(sid, cost, unlocked=False, level=0):
     return t.ProgressionStep(step_id=sid, name="fm%d" % sid, icon="fm%d.png" % sid,
-                             xp_cost=cost, unlocked=unlocked)
+                             xp_cost=cost, unlocked=unlocked, level=level)
 
 
 def test_orders_by_step_sequence_cumulatively_skipping_unlocked():
@@ -28,3 +28,32 @@ def test_start_position_offsets_cumulative_positions():
     ticks = fieldmods.resolve(snap, start_position=500)
     # cumulative from 500: 2500, then 6500
     assert [tk.xp_position for tk in ticks] == [2500, 6500]
+
+
+def test_level_passes_through_to_tick():
+    snap = t.VehicleSnapshot(
+        tier=10, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[_step(1, 2000, level=3), _step(2, 4000, level=4)])
+    ticks = fieldmods.resolve(snap)
+    assert [tk.level for tk in ticks] == [3, 4]
+    assert all(tk.category == "fieldmod" for tk in ticks)
+
+
+def test_max_level_caps_by_tier():
+    assert fieldmods.max_level(6) == 5
+    assert fieldmods.max_level(7) == 5
+    assert fieldmods.max_level(8) == 6
+    assert fieldmods.max_level(9) == 7
+    assert fieldmods.max_level(10) == 8
+    assert fieldmods.max_level(11) == 8
+
+
+def test_resolve_skips_levels_above_tier_cap():
+    # the engine lists all 8 levels; a tier-6 tank can only reach level 5.
+    steps = [_step(i, 3500, level=i) for i in range(1, 9)]  # levels 1..8
+    snap = t.VehicleSnapshot(tier=6, is_elite=True, vehicle_xp=0, free_xp=0,
+                             field_mod_steps=steps)
+    ticks = fieldmods.resolve(snap)
+    assert [tk.level for tk in ticks] == [1, 2, 3, 4, 5]
+    # cumulative XP only spans the available levels
+    assert ticks[-1].xp_position == 5 * 3500

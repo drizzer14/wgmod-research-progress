@@ -7,8 +7,8 @@ def _u(cd, cost, researched=False, kind="module"):
     return t.UnlockItem(cd, "u%d" % cd, "u%d.png" % cd, cost, kind, researched, True)
 
 
-def _step(sid, cost, unlocked=False):
-    return t.ProgressionStep(sid, "fm%d" % sid, "fm%d.png" % sid, cost, unlocked)
+def _step(sid, cost, unlocked=False, level=0):
+    return t.ProgressionStep(sid, "fm%d" % sid, "fm%d.png" % sid, cost, unlocked, level)
 
 
 def test_not_elite_is_tech_tree():
@@ -21,7 +21,8 @@ def test_not_elite_is_tech_tree():
     assert m.fill_vehicle == 500
     assert m.fill_free == 0
     assert [tk.xp_position for tk in m.ticks] == [500, 1500]
-    assert all(tk.category == "techtree" for tk in m.ticks)
+    # tech-tree ticks carry the unlock kind as their category
+    assert all(tk.category == "module" for tk in m.ticks)
 
 
 def test_tech_tree_includes_tier_xi_vehicle_unlock():
@@ -69,6 +70,28 @@ def test_elite_partial_field_mods_skips_unlocked():
     assert m.mode == t.Mode.FIELD_MODS
     assert [tk.xp_position for tk in m.ticks] == [3000]
     assert m.scale_max == 3000
+
+
+def test_fieldmods_counter_and_class_pass_through_to_model():
+    snap = t.VehicleSnapshot(
+        tier=10, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[_step(1, 2000, level=1)],
+        fieldmods_done=2, fieldmods_total=8, vehicle_class="lightTank")
+    m = build_model(snap)
+    assert m.mode == t.Mode.FIELD_MODS
+    assert (m.fieldmods_done, m.fieldmods_total) == (2, 8)
+    assert m.vehicle_class == "lightTank"
+
+
+def test_complete_carries_fieldmods_counter_and_class():
+    snap = t.VehicleSnapshot(
+        tier=9, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[_step(1, 2000, unlocked=True)],  # all done -> complete
+        fieldmods_done=7, fieldmods_total=7, vehicle_class="heavyTank")
+    m = build_model(snap)
+    assert m.mode == t.Mode.COMPLETE
+    assert (m.fieldmods_done, m.fieldmods_total) == (7, 7)
+    assert m.vehicle_class == "heavyTank"
 
 
 def test_elite_field_mods_all_done_is_complete():
