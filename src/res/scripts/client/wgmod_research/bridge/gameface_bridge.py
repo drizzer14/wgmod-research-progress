@@ -11,7 +11,7 @@ ViewModel API (string/number/array, transaction, addViewModel, _addViewModelProp
 was verified live in the EU 2.3 client.
 """
 from frameworks.wulf import ViewModel, Array
-from debug_utils import LOG_CURRENT_EXCEPTION
+from debug_utils import LOG_CURRENT_EXCEPTION, LOG_NOTE
 
 from wgmod_research.adapter import engine_adapter
 from wgmod_research.domain.builder import build_model
@@ -20,6 +20,10 @@ import openwg_gameface
 WIDGET_NAME = "WGModResearch"
 DATA_PROP = "wgResearch"
 COUI = "coui://gui/gameface/mods/drizzer14/WGModResearch"
+
+# (host_vm, rvm) for the currently-mounted widget. Importable so the entry point
+# and the dev REPL can drive refreshes without poking module-private state.
+_active = None
 
 
 class TickVM(ViewModel):
@@ -89,6 +93,7 @@ class ResearchVM(ViewModel):
 def attach(host_vm):
     """Load assets into the hangar doc + expose our data model on the sub-view.
     Returns the ResearchVM instance to push into, or None on failure."""
+    global _active
     try:
         openwg_gameface.gf_mod_inject(
             host_vm, WIDGET_NAME,
@@ -96,13 +101,23 @@ def attach(host_vm):
             modules=[COUI + "/WGModResearch.js"])
         rvm = ResearchVM()
         host_vm._addViewModelProperty(DATA_PROP, rvm)
+        _active = (host_vm, rvm)
         return rvm
     except Exception:
         LOG_CURRENT_EXCEPTION()
         return None
 
 
-def push(rvm):
+def refresh():
+    """Re-push the current vehicle's model into the mounted widget."""
+    if _active is None:
+        LOG_NOTE("[wgmod] refresh: no active widget")
+        return False
+    push(_active[1], host_vm=_active[0])
+    return True
+
+
+def push(rvm, host_vm=None):
     """Recompute the model for the selected vehicle and write it into rvm."""
     if rvm is None:
         return
@@ -111,6 +126,8 @@ def push(rvm):
         if snap is None:
             return
         model = build_model(snap)
+        LOG_NOTE("[wgmod] push mode=%s ticks=%d fillV=%d fillF=%d" % (
+            model.mode, len(model.ticks), model.fill_vehicle, model.fill_free))
         with rvm.transaction() as tx:
             tx.setMode(model.mode)
             tx.setScaleMin(model.scale_min)
@@ -128,5 +145,13 @@ def push(rvm):
                 tv.setAffordable(bool(t.affordable))
                 arr.addViewModel(tv)
             arr.invalidate()
+        # Nudge the host sub-view so its data re-syncs to JS (nested-model
+        # updates may not bubble a data-changed event on their own).
+        if host_vm is not None:
+            try:
+                with host_vm.transaction() as _h:
+                    pass
+            except Exception:
+                pass
     except Exception:
         LOG_CURRENT_EXCEPTION()

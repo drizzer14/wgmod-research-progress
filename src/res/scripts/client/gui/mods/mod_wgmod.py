@@ -14,8 +14,6 @@ from CurrentVehicle import g_currentVehicle
 MOD_NAME = "Research Progress"
 MOD_VERSION = "0.1.0"
 
-_active_rvm = None
-
 
 def _install():
     import openwg_gameface  # noqa: F401  (hard dependency; raises if absent)
@@ -27,30 +25,22 @@ def _install():
         return
 
     _orig_onLoading = P._onLoading
-    _orig_finalize = P._finalize
 
     def _onLoading(self, *args, **kwargs):
         _orig_onLoading(self, *args, **kwargs)
-        global _active_rvm
         try:
-            _active_rvm = bridge.attach(self.getViewModel())
-            bridge.push(_active_rvm)
+            rvm = bridge.attach(self.getViewModel())
+            bridge.push(rvm, host_vm=self.getViewModel())
         except Exception:
             LOG_CURRENT_EXCEPTION()
 
-    def _finalize(self, *args, **kwargs):
-        global _active_rvm
-        _active_rvm = None
-        _orig_finalize(self, *args, **kwargs)
-
     P._onLoading = _onLoading
-    P._finalize = _finalize
     P._wgmod_patched = True
 
     def _on_vehicle_changed(*args, **kwargs):
         try:
-            if _active_rvm is not None:
-                bridge.push(_active_rvm)
+            ok = bridge.refresh()
+            LOG_NOTE("[%s] onChanged -> refresh ok=%s" % (MOD_NAME, ok))
         except Exception:
             LOG_CURRENT_EXCEPTION()
 
