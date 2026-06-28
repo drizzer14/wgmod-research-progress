@@ -12,5 +12,7 @@ def resolve(snapshot):
         ticks.append(t.Tick(
             xp_position=ms.xp_threshold, category="elite", icon=ms.icon, name=ms.name,
             xp_gained=earned, xp_required=ms.xp_threshold,
-            affordable=(ms.xp_threshold <= earned), completed=False))
+            # elite milestones are earned through play, never bought; only
+            # not-yet-reached milestones are emitted, so this is always False.
+            affordable=False, completed=False))
     return ticks

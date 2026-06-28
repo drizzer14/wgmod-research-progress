@@ -105,3 +105,24 @@ def test_elite_partial_fieldmods_then_successor_stacks_correctly():
     assert [tk.category for tk in m.ticks] == ["fieldmod", "tierXI"]
     assert [tk.xp_position for tk in m.ticks] == [3000, 103000]
     assert m.scale_max == 103000
+
+
+def test_build_model_rich_research_plus_tierxi_end_to_end():
+    succ = _u(99, 200000, kind="vehicle")
+    snap = t.VehicleSnapshot(
+        tier=10, is_elite=True, vehicle_xp=4000, free_xp=1000,  # spendable 5000
+        field_mod_steps=[t.ProgressionStep(1, "fm1", "fm1.png", 2000, False),
+                         t.ProgressionStep(2, "fm2", "fm2.png", 1000, True),  # done, skip
+                         t.ProgressionStep(3, "fm3", "fm3.png", 3000, False)],
+        tierxi_successor=succ)
+    m = build_model(snap)
+    assert m.mode == t.Mode.RESEARCH_PLUS_TIERXI
+    assert [tk.category for tk in m.ticks] == ["fieldmod", "fieldmod", "tierXI"]
+    assert [tk.xp_position for tk in m.ticks] == [2000, 5000, 205000]
+    positions = [tk.xp_position for tk in m.ticks]
+    assert positions == sorted(positions)          # monotonic left-to-right
+    assert m.scale_min == 0
+    assert m.scale_max == 205000
+    assert m.fill_spendable == 5000
+    assert m.fill_earned == 0
+    assert [tk.affordable for tk in m.ticks] == [True, True, False]
