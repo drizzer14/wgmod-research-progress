@@ -35,9 +35,13 @@ Out of scope:
 - **One continuous bar.** When more than one category is active (e.g. field mods +
   Tier XI), all their ticks sit on the same bar, ordered by cumulative XP and
   coded by category (icon/color).
-- **Stacked fill.** In research modes the fill is the player's spendable XP shown
-  as two stacked segments: earned **vehicle XP** first, then **global Free XP** on
-  top. Ticks at or below the fill are "affordable" and are visually distinguished.
+- **Stacked fill.** In **every** research category — tech tree, field modifications,
+  Tier XI upgrade nodes, and the Tier XI / potential-Tier-XI vehicle unlock — the fill
+  is the player's spendable XP shown as two stacked segments: earned **vehicle XP**
+  first, then **global Free XP** on top. Both segments are always drawn for research
+  modes (never vehicle-XP-only). Ticks at or below the combined fill are "affordable"
+  and are visually distinguished. (Elite-milestone modes are the only exception — see
+  §4 fill semantics.)
 
 ### Tick model
 
@@ -72,8 +76,9 @@ Evaluated for the selected vehicle, in priority order.
 
 ### Fill semantics
 
-- **Research modes** (tech tree, field mods, Tier XI unlock, Tier XI nodes): fill =
-  what the player can **spend now** = vehicle unspent XP + global Free XP, stacked.
+- **Research modes** (tech tree, field mods, Tier XI unlock / potential Tier XI, Tier XI
+  nodes): fill = what the player can **spend now** = vehicle unspent XP + global Free XP,
+  shown as two stacked segments. Both segments are always present in these modes.
 - **Elite-milestone modes**: fill = XP **earned** toward the milestones. Free XP does
   **not** apply — elite levels are earned on the vehicle, not bought.
 - The elite system applies to **all** elite vehicles, not only Tier XI. The milestone
