@@ -12,6 +12,7 @@ was verified live in the EU 2.3 client.
 """
 from frameworks.wulf import ViewModel, Array
 from debug_utils import LOG_CURRENT_EXCEPTION, LOG_NOTE
+from CurrentVehicle import g_currentVehicle
 
 from wgmod_research.adapter import engine_adapter
 from wgmod_research.domain.builder import build_model
@@ -24,6 +25,28 @@ COUI = "coui://gui/gameface/mods/drizzer14/WGModResearch"
 # (host_vm, rvm) for the currently-mounted widget. Importable so the entry point
 # and the dev REPL can drive refreshes without poking module-private state.
 _active = None
+
+# Strong reference to the onChanged handler. WG's Event holds handlers WEAKLY
+# (see Event.WeakMethodProxy), so a handler with no strong ref is GC'd and never
+# fires. This module lives in sys.modules, so a global ref here keeps it alive.
+_listener = None
+
+
+def _on_vehicle_changed(*args, **kwargs):
+    try:
+        ok = refresh()
+        LOG_NOTE("[wgmod] onChanged -> refresh ok=%s" % ok)
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+
+
+def install_vehicle_listener():
+    """Subscribe to vehicle-selection changes (idempotent)."""
+    global _listener
+    if _listener is not None:
+        return
+    _listener = _on_vehicle_changed
+    g_currentVehicle.onChanged += _listener
 
 
 class TickVM(ViewModel):

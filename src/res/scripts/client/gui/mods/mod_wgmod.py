@@ -9,7 +9,6 @@ model; the widget JS renders from that model. We recompute on vehicle change.
 OpenWG Gameface is a hard dependency. Python 2.7 (BigWorld) runtime.
 """
 from debug_utils import LOG_NOTE, LOG_CURRENT_EXCEPTION
-from CurrentVehicle import g_currentVehicle
 
 MOD_NAME = "Research Progress"
 MOD_VERSION = "0.1.0"
@@ -37,14 +36,9 @@ def _install():
     P._onLoading = _onLoading
     P._wgmod_patched = True
 
-    def _on_vehicle_changed(*args, **kwargs):
-        try:
-            ok = bridge.refresh()
-            LOG_NOTE("[%s] onChanged -> refresh ok=%s" % (MOD_NAME, ok))
-        except Exception:
-            LOG_CURRENT_EXCEPTION()
-
-    g_currentVehicle.onChanged += _on_vehicle_changed
+    # Refresh on vehicle change. The bridge owns the subscription and keeps a
+    # strong ref (WG's Event is weak-ref based, so a transient handler is GC'd).
+    bridge.install_vehicle_listener()
     LOG_NOTE("[%s] v%s installed (sub-view inject + data)" % (MOD_NAME, MOD_VERSION))
 
 
