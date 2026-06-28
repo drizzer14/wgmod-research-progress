@@ -37,3 +37,25 @@ def test_nodes_cumulative_from_earned_baseline():
     assert all(tk.category == "tierXI" for tk in ticks)
     # spendable 7000 covers neither beyond baseline -> none affordable
     assert [tk.affordable for tk in ticks] == [False, False]
+
+
+def test_researched_successor_returns_empty():
+    succ = t.UnlockItem(int_cd=99, name="T11", icon="t11.png", xp_cost=325000,
+                        kind="vehicle", researched=True, prereqs_met=True)
+    snap = t.VehicleSnapshot(tier=10, is_elite=True, vehicle_xp=999999, free_xp=0,
+                             tierxi_successor=succ)
+    assert tierxi.resolve_successor(snap) == []
+
+
+def test_real_successor_takes_precedence_over_potential():
+    real = t.UnlockItem(int_cd=99, name="Real T11", icon="real.png", xp_cost=325000,
+                        kind="vehicle", researched=False, prereqs_met=True)
+    pot = t.UnlockItem(int_cd=0, name="Potential T11", icon="pot.png", xp_cost=100,
+                       kind="vehicle", researched=False, prereqs_met=True)
+    snap = t.VehicleSnapshot(tier=10, is_elite=True, vehicle_xp=0, free_xp=0,
+                             tierxi_successor=real, potential_tierxi=pot)
+    ticks = tierxi.resolve_successor(snap)
+    assert len(ticks) == 1
+    assert ticks[0].category == "tierXI"
+    assert ticks[0].name == "Real T11"
+    assert ticks[0].xp_required == 325000
