@@ -17,9 +17,8 @@ now uses **real in-game icons**:
   total field-mod LEVELS, clamped to the tier cap.
 - **COMPLETE state** → class+elite badge (e.g. `mediumTank_elite.png`).
 
-⚠️ **Changes from this session are on the working tree but NOT committed** — commit
-them at the start of next session (or ask the owner). Tests green (23, py3),
-2.7-compiles clean.
+This session's work is committed (HEAD `5008d23`, branch `main`, unpushed). Tests
+green (23, py3), 2.7-compiles clean.
 
 **IMMEDIATE NEXT STEPS:**
 1. **Tier XI field-mod level cap is UNKNOWN and currently guessed.** `max_level()`
