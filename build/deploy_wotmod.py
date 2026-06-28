@@ -49,8 +49,10 @@ def _abort_if_locked(err):
 
 
 def _clean(mods_dir, res_mods_dir, mod_id):
-    # 1) old versions of OUR packaged mod
-    for f in glob.glob(os.path.join(mods_dir, mod_id + "_*.wotmod")):
+    # 1) old versions of OUR packaged mod. Match only version-numbered files
+    # (mod_id + "_<digit>...") so we never delete a sibling dev mod such as
+    # "<mod_id>_debug.wotmod".
+    for f in glob.glob(os.path.join(mods_dir, mod_id + "_[0-9]*.wotmod")):
         try:
             os.remove(f)
         except OSError as e:
