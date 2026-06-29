@@ -213,6 +213,32 @@
     opacity: 1;
 }
 
+/* ELITE / ELITE_REWARDS: prestige-gold partial fill (progress within the current
+   grade band / toward the next reward). Single segment -- free XP stays hidden. */
+#wgmod-root.wg-elite .wg-fill-veh {
+    background: #d9a441;
+    opacity: 1;
+}
+#wgmod-root.wg-elite .wg-fill-free {
+    width: 0;
+}
+/* ELITE_REWARDS (tier XI exclusive-reward roadmap): the epic-attachment rarity
+   purple (#9160d0, from the client's AttachmentRarity_base__epic) instead of the
+   gold grade-band tone. Two-class selector so it beats the .wg-elite rule above
+   regardless of source order. */
+#wgmod-root.wg-elite.wg-elite-rewards .wg-fill-veh {
+    background: #9160d0;
+    opacity: 1;
+}
+/* Elite modes show the class+elite badge as the category icon (like COMPLETE):
+   it already carries a baked-in shadow and more internal padding. */
+#wgmod-root.wg-elite .wg-cat-icon {
+    width: 30rem;
+    height: 30rem;
+    margin-top: 0;
+    filter: none;
+}
+
 #wgmod-root .wg-ticks {
     position: absolute;
     top: -3rem;
@@ -337,6 +363,114 @@
     font-size: 9rem;
     font-weight: 700;
     color: #ecca9d;             /* tan numeral on the dark fill */
+}
+
+/* --- Elite Levels (prestige) marks ------------------------------------- */
+/* The vertical tick line itself stays subtle in elite modes; the pip /
+   thumbnail below carries the state coloring. */
+#wgmod-root .wg-elite-tick {
+    background: #b2afab;
+    opacity: 0.65;
+}
+
+/* Grade sub-grade pip (and the reward fallback when its art didn't resolve): a
+   small diamond hung below the tick, colored by state. */
+#wgmod-root .wg-tick-pip {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    margin-top: 5rem;
+    transform: translateX(-50%);
+    width: 11rem;
+    height: 11rem;
+    background: #6d665c;        /* upcoming default */
+    clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+    filter: drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+}
+#wgmod-root .wg-state-achieved .wg-tick-pip {
+    background: #e8b84b;        /* prestige gold */
+}
+#wgmod-root .wg-state-next .wg-tick-pip {
+    background: #ede6d9;        /* bright parchment -- the one you're working on */
+    filter: drop-shadow(0 0 4rem rgba(255, 255, 255, 0.8));
+}
+#wgmod-root .wg-state-upcoming .wg-tick-pip {
+    background: #6d665c;
+    opacity: 0.85;
+}
+
+/* Reward thumbnail (tier-XI exclusive rewards): the real style/attachment art,
+   FRAMELESS -- no box/border. State is conveyed by treating the art itself:
+   earned = full color + gold glow; next = bright white glow; upcoming = faded +
+   desaturated. background-size:contain (Gameface clips an <img>). */
+#wgmod-root .wg-tick-reward {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    margin-top: 5rem;
+    transform: translateX(-50%);
+    width: 30rem;
+    height: 30rem;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    filter: drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+}
+
+/* Grade emblem (ELITE mode): the in-game elite-level badge -- the same art the
+   battle team-HP bars show. Shares the reward thumbnail's frameless, state-treated
+   look. Slightly smaller, matching the badge's square art. */
+#wgmod-root .wg-tick-emblem {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    margin-top: 4rem;
+    transform: translateX(-50%);
+    width: 26rem;
+    height: 26rem;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    filter: drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+}
+/* The elite-level number, centered on the emblem badge (the art has an empty
+   center the game fills with this). Small, bold, light, shadowed for contrast
+   against the grade-tinted badge. */
+#wgmod-root .wg-tick-emblem-num {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: "PFDINMax", sans-serif;
+    font-size: 9rem;
+    font-weight: 700;
+    color: #ede6d9;
+    text-shadow: 0 0 3rem #000, 0 1rem 2rem rgba(0, 0, 0, 0.95);
+}
+
+/* State treatment, shared by reward thumbnails and grade emblems. */
+#wgmod-root .wg-state-achieved .wg-tick-reward,
+#wgmod-root .wg-state-achieved .wg-tick-emblem {
+    /* earned -> full art, warm gold glow hugging its silhouette. */
+    filter: drop-shadow(0 0 3rem rgba(232, 184, 75, 0.85))
+            drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+}
+#wgmod-root .wg-state-next .wg-tick-reward,
+#wgmod-root .wg-state-next .wg-tick-emblem {
+    /* next -> bright white glow, the one you're working toward. */
+    filter: drop-shadow(0 0 4rem rgba(255, 255, 255, 0.85))
+            drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+}
+#wgmod-root .wg-state-upcoming .wg-tick-reward,
+#wgmod-root .wg-state-upcoming .wg-tick-emblem {
+    /* future -> faded + desaturated art, reads as "not yet". */
+    filter: grayscale(0.7) brightness(0.85)
+            drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+    opacity: 0.6;
 }
 
 /* Hover tooltip (name + XP), shown above the track at the hovered tick's x.

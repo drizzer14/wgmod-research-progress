@@ -21,6 +21,12 @@ const CAT_ICON = {
 // we use the clean base glyph in every mode instead.
 const XP_ICON = "img://gui/maps/icons/vehicle_hub/research_purchase/total_experience.png";
 
+// The plain combat-XP currency glyph (gray star) -- used ONLY by the elite-mode
+// readout, which shows cumulative COMBAT XP (no free XP), unlike the other modes'
+// combined Total-XP star above. Verified by viewing the PNG (its free-XP sibling
+// freeXpIcon_23x22 confirms it's the standard combat/free pair).
+const COMBAT_XP_ICON = "img://gui/maps/icons/library/xpIcon_23x22.png";
+
 // Elite badge for the COMPLETE state: the in-game class+elite icon. veh class
 // ids use '-' (AT-SPG); the icon files use '_' (AT_SPG_elite.png).
 function eliteIcon(vehClass) {
@@ -173,6 +179,13 @@ function render(model) {
         return;
     }
 
+    // Elite Levels (prestige) modes own the whole header + bar (grade/reward
+    // readout, single-segment fill, combat-XP star), so they branch out early.
+    if (data.mode === "elite" || data.mode === "elite_rewards") {
+        renderElite(root, data, data.mode === "elite_rewards");
+        return;
+    }
+
     // Field-mod progress counter (researched / total levels within the tier
     // cap) -- shown whenever the vehicle has field mods, regardless of mode.
     setUpgrades(upgradesEl, data.fieldModsDone || 0, data.fieldModsTotal || 0);
@@ -274,6 +287,116 @@ function render(model) {
         ticksEl.appendChild(mark);
     }
     hotEl._wgTickMeta = tickMeta;
+}
+
+// Tooltip body for an elite mark: the grade/reward name, (rewards) the reward
+// type, and the elite level the mark sits at.
+function eliteTooltipHtml(t, isRewards) {
+    let html = "";
+    const name = t.name || (isRewards ? "Reward" : "");
+    if (name) html += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
+    // XP "cost": the cumulative combat XP needed to reach this elite level --
+    // makes the level number meaningful. Shown in the currency-tan XP style.
+    const xp = t.xpRequired | 0;
+    if (xp > 0) html += '<div class="wg-tip-xp">' + fmtXp(xp) + " XP</div>";
+    // status line: "<reward type> · " (rewards only) + the elite level.
+    let status = "Elite Level " + (t.position | 0);
+    if (isRewards) {
+        const opts = (t.options || "").split("\n").filter(function (s) { return s; });
+        if (opts.length) status = escapeHtml(opts[0]) + " · " + status;
+    }
+    html += '<div class="wg-tip-status">' + status + "</div>";
+    return html;
+}
+
+// Render the ELITE (grade band) / ELITE_REWARDS (reward roadmap) views. Reuses
+// the bar's track + hover overlay but with a single fill segment, a combat-XP
+// readout, an "Elite Lvl N/350" counter, and grade-pip / reward-thumbnail ticks.
+function renderElite(root, data, isRewards) {
+    root.className = "wg-elite" + (isRewards ? " wg-elite-rewards" : "");
+    const label = root.querySelector(".wg-label");
+    const catIcon = root.querySelector(".wg-cat-icon");
+    const upgradesEl = root.querySelector(".wg-upgrades");
+    const xpEl = root.querySelector(".wg-xp");
+    const vehEl = root.querySelector(".wg-fill-veh");
+    const freeEl = root.querySelector(".wg-fill-free");
+    const ticksEl = root.querySelector(".wg-ticks");
+    const tipEl = root.querySelector(".wg-tooltip");
+    const hotEl = root.querySelector(".wg-hot");
+    ensureHover(hotEl, tipEl);
+
+    // Header: title (grade family / "EXCLUSIVE REWARDS"), the Elite-level
+    // counter, the class+elite badge, and the combat-XP readout.
+    const grade = data.eliteGrade || "";
+    const gradeName = grade ? grade.charAt(0).toUpperCase() + grade.slice(1) : "";
+    label.textContent = isRewards
+        ? "EXCLUSIVE REWARDS"
+        : ("Elite System" + (gradeName ? " " + gradeName : ""));
+    const lvl = data.eliteLevel | 0;
+    const maxLvl = data.eliteMaxLevel | 0;
+    upgradesEl.textContent = "LVL " + lvl + (maxLvl ? "/" + maxLvl : "");
+    upgradesEl.style.display = "block";
+    setCatIcon(catIcon, eliteIcon(data.vehicleClass));
+    xpEl.style.display = "flex";
+    root.querySelector(".wg-xp-ico").style.backgroundImage = "url('" + COMBAT_XP_ICON + "')";
+    root.querySelector(".wg-xp-val").textContent = fmtXp(data.combatXp || 0, ",");
+
+    // Single-segment fill across the band/roadmap axis.
+    const sMin = data.scaleMin || 0;
+    const sMax = data.scaleMax || 0;
+    const span = Math.max(sMax - sMin, 1);
+    const pct = (x) => Math.max(0, Math.min(100, ((x - sMin) / span) * 100));
+    const fillPos = sMin + (data.fillVehicle || 0);
+    vehEl.style.left = "0%";
+    vehEl.style.width = pct(fillPos) + "%";
+    freeEl.style.left = "0%";
+    freeEl.style.width = "0%";
+
+    // Milestone ticks: grade sub-pips, or reward thumbnails ringed by state.
+    ticksEl.innerHTML = "";
+    const ticks = data.ticks;
+    const n = arrLen(ticks);
+    const tickMeta = [];
+    for (let i = 0; i < n; i++) {
+        const t = unwrap(ticks[i] !== undefined ? ticks[i] : ticks.get && ticks.get(i));
+        if (!t) continue;
+        const state = t.state || "upcoming";
+        const mark = document.createElement("div");
+        mark.className = "wg-tick wg-elite-tick wg-state-" + state;
+        const leftPct = pct(t.position);
+        mark.style.left = leftPct + "%";
+        const body = eliteTooltipHtml(t, isRewards);
+        mark._wgBody = body;
+        mark._wgLeft = leftPct;
+        tickMeta.push({ left: leftPct, body: body });
+
+        if (t.icon) {
+            // ELITE_REWARDS -> reward art thumbnail; ELITE -> the grade emblem
+            // (the same badge the battle team-HP bars show). Both are state-treated
+            // background-image divs (Gameface clips an <img>).
+            const img = document.createElement("div");
+            img.className = isRewards ? "wg-tick-reward" : "wg-tick-emblem";
+            img.style.backgroundImage = "url('" + t.icon + "')";
+            if (!isRewards) {
+                // overlay the elite level this emblem is reached at (the badge
+                // art ships without the number -- the game renders it on top).
+                const num = document.createElement("span");
+                num.className = "wg-tick-emblem-num";
+                num.textContent = String(t.position | 0);
+                img.appendChild(num);
+            }
+            mark.appendChild(img);
+        } else {
+            // fallback (icon URL missing): a state-colored diamond.
+            const pip = document.createElement("div");
+            pip.className = "wg-tick-pip";
+            mark.appendChild(pip);
+        }
+        ticksEl.appendChild(mark);
+    }
+    hotEl._wgTickMeta = tickMeta;
+    // Don't force-hide the tooltip here (render() re-runs on model updates); the
+    // hover handler owns visibility, same as the main bar.
 }
 
 // Attach the hover handler to the ticks layer exactly once. That layer is the

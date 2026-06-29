@@ -41,6 +41,7 @@ def build_snapshot():
     unlocks = _safe(lambda: stats.unlocks, set()) if stats is not None else set()
 
     fm_steps, fm_done, fm_total = _read_post_progression(veh)
+    prestige = _read_prestige(veh)
 
     return t.VehicleSnapshot(
         tier=_safe_int(lambda: veh.level, 0),
@@ -50,7 +51,15 @@ def build_snapshot():
         tech_unlocks=_read_tech_unlocks(veh, unlocks),
         field_mod_steps=fm_steps,
         fieldmods_done=fm_done, fieldmods_total=fm_total,
-        vehicle_class=_safe(lambda: veh.type, "") or "")
+        vehicle_class=_safe(lambda: veh.type, "") or "",
+        has_prestige=prestige["has_prestige"],
+        elite_level=prestige["elite_level"],
+        elite_max_level=prestige["elite_max_level"],
+        elite_current_xp=prestige["elite_current_xp"],
+        elite_next_xp=prestige["elite_next_xp"],
+        elite_grades=prestige["elite_grades"],
+        elite_rewards=prestige["elite_rewards"],
+        elite_level_xp=prestige["elite_level_xp"])
 
 
 # --- helpers ---------------------------------------------------------------
@@ -181,6 +190,163 @@ def _read_post_progression(veh):
     except Exception:
         LOG_CURRENT_EXCEPTION()
         return steps, fm_done, fm_total
+
+
+def _prestige_defaults():
+    return dict(has_prestige=False, elite_level=0, elite_max_level=0,
+                elite_current_xp=0, elite_next_xp=0,
+                elite_grades=[], elite_rewards=[])
+
+
+def _read_prestige(veh):
+    """Read the Elite-Levels ("prestige") state into the snapshot's prestige
+    fields (EU 2.3). Best-effort and fully guarded: any failure degrades to
+    has_prestige=False so the bar falls back to the COMPLETE "fully researched"
+    badge.
+
+    Sources (gui.prestige.prestige_helpers, deps auto-injected):
+      - hasVehiclePrestige(cd, checkElite=True): gate (elite + prestige enabled).
+      - getVehiclePrestige(cd) -> (currentLevel, remainingPoints).
+      - getCurrentProgress(cd, lvl, pts) -> (currentXP, nextLvlXP); the (-1,-1)
+        no-data and (1,1) maxed sentinels are handled downstream in the resolver.
+      - getSortedGrades(cd) -> grade thresholds (incl. the synthetic MAX entry,
+        whose level is the cap); mapGradeIDToUI maps the mark to (family, sub).
+      - getMilestones / getVehicleAchievedMilestones -> tier-exclusive rewards.
+    """
+    out = _prestige_defaults()
+    try:
+        from gui.prestige import prestige_helpers as ph
+    except Exception:
+        return out
+    try:
+        veh_cd = veh.intCD
+        if not ph.hasVehiclePrestige(veh_cd, checkElite=True):
+            return out
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+        return out
+
+    out["has_prestige"] = True
+    prestige = _safe(lambda: ph.getVehiclePrestige(veh_cd), None)
+    cur_level = _safe_int(lambda: prestige.currentLevel, 0) if prestige is not None else 0
+    remaining = _safe_int(lambda: prestige.remainingPoints, 0) if prestige is not None else 0
+    out["elite_level"] = cur_level
+    cxp, nxp = _safe(lambda: tuple(ph.getCurrentProgress(veh_cd, cur_level, remaining)),
+                     (-1, -1))
+    out["elite_current_xp"] = int(cxp)
+    out["elite_next_xp"] = int(nxp)
+
+    grades = _read_elite_grades(ph, veh_cd)
+    out["elite_grades"] = grades
+    out["elite_max_level"] = grades[-1].level if grades else cur_level
+
+    out["elite_rewards"] = _read_elite_rewards(ph, veh_cd, cur_level)
+    out["elite_level_xp"] = _read_level_xp(ph, veh_cd)
+    return out
+
+
+def _read_level_xp(ph, veh_cd):
+    """{level -> cumulative combat XP required to REACH that level}. The prestige
+    config's per-vehicle points array holds the per-level cost (points[L-1] = the
+    cost of level L; points[0] == 0); cumulative points to reach level L is
+    sum(points[0:L]), converted to XP via prestigePointsToXP. Best-effort -> {}."""
+    out = {}
+    try:
+        from skeletons.gui.lobby_context import ILobbyContext
+        cfg = dependency.instance(ILobbyContext).getServerSettings().prestigeConfig
+        points = cfg.getVehiclePoints(veh_cd)
+        if not points:
+            return out
+        cum = 0
+        for i, p in enumerate(points):
+            cum += int(p or 0)
+            out[i + 1] = int(ph.prestigePointsToXP(cum))
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+    return out
+
+
+def _read_elite_grades(ph, veh_cd):
+    """[EliteGrade] from getSortedGrades(), each mark mapped to its complex-grade
+    family + sub-grade via mapGradeIDToUI. The PrestigeLevelGrade enum value is
+    the family id ('iron'..'enamel'/'prestige')."""
+    out = []
+    try:
+        for g in ph.getSortedGrades(veh_cd):
+            try:
+                grade_enum, sub = ph.mapGradeIDToUI(g.prestigeMarkID)
+                family = getattr(grade_enum, "value", str(grade_enum))
+                out.append(t.EliteGrade(level=int(g.level), grade=family,
+                                        sub=int(sub), main=bool(g.main)))
+            except Exception:
+                LOG_CURRENT_EXCEPTION()
+                continue
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+    return out
+
+
+def _read_elite_rewards(ph, veh_cd, cur_level):
+    """[EliteReward] for the tier-exclusive milestone rewards. Empty unless the
+    vehicle's tier enables them (getMilestones non-empty). `achieved` mirrors the
+    game's rule: reached AND recorded in the achieved set."""
+    out = []
+    try:
+        milestones = ph.getMilestones(veh_cd) or {}
+        if not milestones:
+            return out
+        achieved = _safe(lambda: ph.getVehicleAchievedMilestones(veh_cd), set()) or set()
+        for level in sorted(milestones):
+            try:
+                is_done = bool(cur_level >= level and level in achieved)
+                icon, label, type_label = _read_reward_art(
+                    ph, veh_cd, level, milestones, is_done)
+                out.append(t.EliteReward(
+                    level=int(level), achieved=is_done,
+                    icon=icon, label=label, type_label=type_label))
+            except Exception:
+                LOG_CURRENT_EXCEPTION()
+                continue
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+    return out
+
+
+def _read_reward_art(ph, veh_cd, level, milestones, is_done):
+    """(icon_url, name, type_label) for a milestone reward. The reward is a
+    customization (2D style / attachment / stat-tracker); its thumbnail is an
+    img:// URL: styles expose `.icon` as img://<previewIcon>, others `.iconUrl`
+    (getTextureLinkByID -> img://). Falls back to the generic per-type bonus icon,
+    then none. Entirely best-effort."""
+    icon, label, type_label = "", "", ""
+    try:
+        from gui.impl.lobby.vehicle_hub.sub_presenters.veh_skill_tree.utils import (
+            getPrestigeBonus, PrestigeBonusContext, PrestigeCustomizationBonusUIPacker)
+        from gui.impl.gen.view_models.views.lobby.vehicle_hub.views.sub_models.veh_skill_tree.rewards_slot_model import RewardStatus
+        from gui.shared.gui_items import getItemTypeID
+        state = RewardStatus.ACHIEVED if is_done else RewardStatus.AVAILABLE
+        bonus = getPrestigeBonus(milestones, PrestigeBonusContext(veh_cd, level, state))
+        if bonus is None:
+            return icon, label, type_label
+        custs = bonus.getCustomizations()
+        if not custs:
+            return icon, label, type_label
+        c11n = bonus.getC11nItem(custs[0])
+        label = _safe(lambda: c11n.userName, "") or ""
+        # Prefer an img:// thumbnail; .icon is img:// only for styles.
+        candidate = _safe(lambda: c11n.icon, "") or ""
+        if not candidate.startswith("img://"):
+            candidate = _safe(lambda: c11n.iconUrl, "") or candidate
+        if not candidate.startswith("img://"):
+            candidate = _safe(lambda: c11n.getBonusIcon("small"), "") or candidate
+        icon = candidate if candidate.startswith("img://") else ""
+        item_type_id = _safe(lambda: getItemTypeID(custs[0].get("custType")), None)
+        if item_type_id is not None:
+            title, _desc = PrestigeCustomizationBonusUIPacker.getTextInfoByItemTypeID(item_type_id)
+            type_label = title or ""
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+    return icon, label, type_label
 
 
 def _pair_options(action):

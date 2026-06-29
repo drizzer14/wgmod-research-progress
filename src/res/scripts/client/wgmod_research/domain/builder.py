@@ -4,14 +4,18 @@
 Per selected vehicle:
 - not elite (something left to unlock) -> TECH_TREE (modules + next vehicles).
 - elite (fully researched) with remaining field-mod steps -> FIELD_MODS.
-- elite and no field mods remaining (or none exist) -> COMPLETE (full bar).
+- elite + prestige + tier-exclusive rewards still to earn -> ELITE_REWARDS
+  (the reward roadmap shown first).
+- elite + prestige (rewards all earned / none) -> ELITE (grade-band progression).
+- elite, no prestige data -> COMPLETE ("fully researched" badge fallback).
 
 Fill is the player's spendable XP shown as two stacked segments: vehicle XP
 first, then global free XP. The view treats a scale_min == scale_max range as
-100% (guard divide-by-zero).
+100% (guard divide-by-zero). The ELITE/ELITE_REWARDS modes reuse the same
+scale/ticks/fill axis with a single segment (fill_free = 0).
 """
 from wgmod_research.domain import types as t
-from wgmod_research.domain.resolvers import techtree, fieldmods
+from wgmod_research.domain.resolvers import techtree, fieldmods, elite
 
 
 def _max_pos(ticks, default):
@@ -41,8 +45,33 @@ def build_model(snapshot):
             fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=fm_ticks,
             fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class)
 
-    # nothing left to research: COMPLETE (elite badge in the view).
+    # Fully researched. If the vehicle has Elite-Levels (prestige) data, show
+    # the prestige progression instead of the static "fully researched" badge.
+    if snapshot.has_prestige:
+        # Tier-exclusive reward roadmap takes priority while any reward is
+        # unearned; once all are earned, fall through to the grade band.
+        reward = elite.resolve_reward_track(snapshot)
+        if reward is not None and reward["any_unearned"]:
+            return _elite_model(t.Mode.ELITE_REWARDS, reward, snapshot)
+        band = elite.resolve_grade_band(snapshot)
+        if band is not None:
+            return _elite_model(t.Mode.ELITE, band, snapshot)
+
+    # nothing left to research and no prestige data: COMPLETE (elite badge).
     return t.ResearchProgressModel(
         mode=t.Mode.COMPLETE, scale_min=0, scale_max=0,
         fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=[],
         fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class)
+
+
+def _elite_model(mode, res, snapshot):
+    """Build an ELITE / ELITE_REWARDS model from a resolver result dict. The
+    band uses a single fill segment (vehicle slot) so fill_free stays 0; the
+    readout is cumulative combat XP."""
+    return t.ResearchProgressModel(
+        mode=mode, scale_min=res["scale_min"], scale_max=res["scale_max"],
+        fill_vehicle=res["fill"], fill_free=0, ticks=res["ticks"],
+        vehicle_class=snapshot.vehicle_class,
+        elite_level=res["level"], elite_max_level=res["max_level"],
+        elite_grade=res.get("grade", ""), elite_sub=res.get("sub", 0),
+        combat_xp=snapshot.vehicle_xp)

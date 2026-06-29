@@ -1,16 +1,93 @@
 # Session Handoff — Research-Progress Bar (Phase 2, in-game working)
 
-_Updated 2026-06-29 (visual-polish session 2). Read tools/dev/README.md for the
-dev loop — the hot-reload loop for JS/CSS-only changes was used throughout this
-session. **NEXT SESSION FOCUS: replace the "Fully researched" COMPLETE fallback
-with an ELITE SYSTEM PROGRESSION view** (owner-set). OPEN QUESTION before
-building: an earlier decompiled finding recorded that **EU dropped Paragons /
-elite milestones** (see Gotchas), so step 1 is to pin down what "elite
-progression" means in EU 2.3 today (crew/vehicle prestige? a post-field-mods
-track? demountable/experimental equipment?) — clarify with the owner AND verify
-against the decompiled source (`C:\Users\Dmytro Vasylkivskyi\wot-eu`, branch 2.3)
-before designing. This is a DATA/DOMAIN change (new mode in the builder + adapter
-reads), so it needs the Python build+deploy+relaunch loop, not just hot-reload._
+_Updated 2026-06-29 (Elite-System session). Read tools/dev/README.md for the dev
+loop. **THIS SESSION shipped the Elite Levels ("prestige") system** — see "Elite
+System (DONE this session)" below. **NEXT SESSION FOCUS: TIER-XI UPGRADES
+("vehicle skill tree") progression.** Owner-set. NB: the owner **cannot visually
+verify it yet** — they have no un-upgraded tier-XI vehicle on the account right
+now — so develop against the decompiled source + the live REPL, get the data
+plumbing right, and DEFER the in-game visual sign-off until a suitable tank is
+available (or one is found). This is a DATA/DOMAIN change (new mode/adapter reads
+for the branching skill tree), so it needs the Python build+deploy+relaunch loop,
+not just hot-reload. Research leads are pre-collected in "Tier-XI upgrades" below._
+
+## Elite System (DONE this session — deployed, owner verifying in-game)
+The "EU dropped elite/Paragons" note was WRONG (it conflated EU's Elite Levels
+with Lesta's RU "Paragon"). EU 2.3 ships WG's global **Elite Levels** feature
+(internal codename **"prestige"**, update 1.22.1): cosmetic per-vehicle 0→350
+levels via combat XP after a vehicle is elite. The `COMPLETE` "fully researched"
+fallback is now replaced by two new modes (precedence: TECH_TREE → FIELD_MODS →
+**ELITE_REWARDS** → **ELITE** → COMPLETE):
+- **ELITE** (any elite vehicle with prestige): the CURRENT grade band. Shows the
+  current complex grade's sub-grade milestones as the real **team-HP-bar emblems**
+  (`img://gui/maps/icons/prestige/emblem/48x48/<family>/<sub>.png`; MAX =
+  `…/48x48/prestige.png`), each **overlaid with the elite level it's reached at**
+  (the badge art ships numberless; `.wg-tick-emblem-num` renders it), plus ONE
+  extra tick for the next grade's first level. Gold fill. Label "Elite System
+  {Grade}". Tooltip: **capitalized** title ("Silver 2"/"Prestige") + **cumulative
+  combat-XP cost to reach that level** + "Elite Level N".
+- **ELITE_REWARDS** (tier-XI vehicles with unearned milestone rewards, shown
+  FIRST, then falls back to ELITE once all earned): the tier-exclusive reward
+  roadmap. Each milestone tick is the **real reward thumbnail** (style/attachment
+  art via `c11nItem.icon`/`.iconUrl` → `img://`), state-treated (earned gold-glow /
+  next white-glow / upcoming faded). Fill = **epic-attachment purple `#9160d0`**.
+- Both elite modes: single-segment fill; readout = **cumulative combat XP**
+  (vehicle XP, no free XP) with the gray combat star
+  `img://gui/maps/icons/library/xpIcon_23x22.png` (not the gold total-XP star).
+- Code: domain `resolvers/elite.py` (`resolve_grade_band` / `resolve_reward_track`,
+  pure, 20 tests) + `Mode.ELITE`/`ELITE_REWARDS` in `builder.py`; adapter
+  `engine_adapter._read_prestige`/`_read_elite_grades`/`_read_elite_rewards`/
+  `_read_reward_art`/`_read_level_xp` (all best-effort, guarded → COMPLETE
+  fallback); bridge VM props (`eliteLevel/Max/Grade/Sub/combatXp`, tick `state`);
+  JS `renderElite` + `.wg-tick-emblem`/`.wg-tick-reward` CSS. 43 pytest green;
+  2.7-compiles; img:// thumbnails confirmed rendering in-game.
+- **APIs (gui.prestige.prestige_helpers, deps auto-inject):** `hasVehiclePrestige
+  (cd, checkElite=True)`, `getVehiclePrestige(cd)`→`(level, remainingPts)`,
+  `getCurrentProgress(cd,lvl,pts)`→`(curXP,nextXP)` (sentinels (-1,-1)/(1,1)),
+  `getSortedGrades(cd)`+`mapGradeIDToUI(markID)`→`(family,sub)`, `getMilestones`/
+  `getVehicleAchievedMilestones`, reward bonus via veh_skill_tree `utils
+  .getPrestigeBonus`+`PrestigeBonusContext`. XP-cost = cumulative of the prestige
+  config's per-vehicle points array (`prestigeConfig.getVehiclePoints(cd)`,
+  `points[L-1]`=level cost, `points[0]`=0) via `prestigePointsToXP`.
+- **All owner-verified in-game (2026-06-29):** emblems + overlaid level numbers,
+  next-grade tick, "Elite System {Grade}" label, capitalized tooltip titles, and
+  the **XP-cost numbers are correct** (cross-checked against the game's own
+  prestige screen). Reward thumbnails (img://) render. Watch-out fixed mid-session:
+  a new snapshot field must be wired into BOTH `_read_prestige`'s out-dict AND the
+  `VehicleSnapshot(...)` call in `build_snapshot` — `elite_level_xp` was computed
+  but not passed, so all XP read as 0 until the constructor arg was added.
+
+## Tier-XI upgrades ("vehicle skill tree") — NEXT FOCUS (research pre-collected)
+Tier-XI vehicles are reached by **upgrading** a tier-X via a branching **vehicle
+skill tree** (NOT the linear field-mod ladder our FIELD_MODS mode reads). A
+vehicle is `eliteByProgression` (so field-mods/prestige unlock) when its
+`typeDescr.postProgressionTree >= VEH_SKILL_TREE_ID_OFFSET` (=10000; see
+`items/vehicles.py:2053` and `common/post_progression_common.py:33`). The current
+`engine_adapter._read_post_progression` assumes leveled steps (levels 1..8 +
+multi-mod pairs) clamped to a tier cap — that model does NOT fit a skill tree, so
+tier-XI upgrade vehicles likely render wrong/empty in FIELD_MODS today. Goal: a
+dedicated representation of the skill-tree upgrade progress.
+- **Data**: same entry `veh.postProgression.iterOrderedSteps()`, but the steps form
+  a branching tree. Per-step (see `…/veh_skill_tree/utils.py:fillNodeModel`):
+  `step.getPosition()`→(x,y), `step.getType()`→node `Type`
+  (major/special/final/common/ghost), `step.action.getImageName()`/`getLocName()`,
+  `step.getPrice().xp`, `step.isReceived()`, `step.getNextStepIDs()`,
+  `step.action.isFeatureAction()`/`actionID`. Node `Status` =
+  researched/selected/default (`…/veh_skill_tree/node_model.py`).
+- **Whole-tree state**: `post_progression_common.VehicleState` (unlocks/pairs/
+  features; `isResearchedTree(tree)`). Helpers in veh_skill_tree `utils.py`:
+  `getFullProgressionState(vehicle)`, `getCheapestAvailablePerk(vehicle)` (walks
+  the tree from `getRawTree().rootStep` via `getNextStepIDs`).
+- **Design question for next session (clarify w/ owner):** a skill tree is 2-D /
+  branching; our bar is a single XP axis. Options: (a) collapse to a linear
+  "researched perks / total + XP toward the cheapest next perk" progress; (b) a
+  distinct "upgrade %" readout; (c) something else. Pick the bar-friendly framing
+  first, then build a new `Mode` + resolver + adapter read, mirroring how
+  ELITE/FIELD_MODS are structured.
+- **Verification constraint:** owner has no un-upgraded tier-XI tank right now.
+  Develop + unit-test the domain logic, introspect a real skill-tree vehicle's
+  steps via the REPL (`tools/dev/repl_client.py`, dump `iterOrderedSteps()` shapes)
+  to confirm the reads, but the final visual sign-off waits for a suitable tank.
 
 ## TL;DR — where we are
 The mod **works in-game** on WoT **EU 2.3.0.1**. The Garage bar renders from live

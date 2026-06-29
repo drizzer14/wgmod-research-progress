@@ -64,7 +64,7 @@ def install_vehicle_listener():
 
 
 class TickVM(ViewModel):
-    def __init__(self, properties=9, commands=0):
+    def __init__(self, properties=10, commands=0):
         super(TickVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -78,6 +78,7 @@ class TickVM(ViewModel):
         self._addStringProperty("icon", "")      # 6 (img:// URL, may be empty)
         self._addNumberProperty("level", 0)      # 7 (field-mod level -> roman)
         self._addStringProperty("options", "")   # 8 (pair variants, \n-joined)
+        self._addStringProperty("state", "")     # 9 (elite mark: achieved/next/upcoming)
 
     def setPosition(self, v):
         self._setNumber(0, v)
@@ -106,9 +107,12 @@ class TickVM(ViewModel):
     def setOptions(self, v):
         self._setString(8, v)
 
+    def setState(self, v):
+        self._setString(9, v)
+
 
 class ResearchVM(ViewModel):
-    def __init__(self, properties=9, commands=0):
+    def __init__(self, properties=14, commands=0):
         super(ResearchVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -122,6 +126,11 @@ class ResearchVM(ViewModel):
         self._addNumberProperty("fieldModsDone", 0)   # 6
         self._addNumberProperty("fieldModsTotal", 0)  # 7
         self._addStringProperty("vehicleClass", "")  # 8 (for elite badge)
+        self._addNumberProperty("eliteLevel", 0)     # 9
+        self._addNumberProperty("eliteMaxLevel", 0)  # 10
+        self._addStringProperty("eliteGrade", "")    # 11 (grade family id)
+        self._addNumberProperty("eliteSub", 0)       # 12 (current sub-grade 1..4)
+        self._addNumberProperty("combatXp", 0)       # 13 (cumulative combat XP)
 
     def setMode(self, v):
         self._setString(0, v)
@@ -149,6 +158,21 @@ class ResearchVM(ViewModel):
 
     def setVehicleClass(self, v):
         self._setString(8, v)
+
+    def setEliteLevel(self, v):
+        self._setNumber(9, v)
+
+    def setEliteMaxLevel(self, v):
+        self._setNumber(10, v)
+
+    def setEliteGrade(self, v):
+        self._setString(11, v)
+
+    def setEliteSub(self, v):
+        self._setNumber(12, v)
+
+    def setCombatXp(self, v):
+        self._setNumber(13, v)
 
     @staticmethod
     def getTicksType():
@@ -202,6 +226,11 @@ def push(rvm, host_vm=None):
             tx.setFieldModsDone(model.fieldmods_done)
             tx.setFieldModsTotal(model.fieldmods_total)
             tx.setVehicleClass(model.vehicle_class or "")
+            tx.setEliteLevel(model.elite_level or 0)
+            tx.setEliteMaxLevel(model.elite_max_level or 0)
+            tx.setEliteGrade(model.elite_grade or "")
+            tx.setEliteSub(model.elite_sub or 0)
+            tx.setCombatXp(model.combat_xp or 0)
             arr = tx.getTicks()
             arr.clear()
             for t in model.ticks:
@@ -215,6 +244,7 @@ def push(rvm, host_vm=None):
                 tv.setIcon(t.icon or "")
                 tv.setLevel(t.level or 0)
                 tv.setOptions("\n".join(t.options or []))
+                tv.setState(t.state or "")
                 arr.addViewModel(tv)
             arr.invalidate()
         # Nudge the host sub-view so its data re-syncs to JS (nested-model

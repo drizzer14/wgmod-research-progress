@@ -109,3 +109,61 @@ def test_elite_with_no_field_mods_is_complete():
     m = build_model(snap)
     assert m.mode == t.Mode.COMPLETE
     assert m.ticks == []
+
+
+# --- Elite Levels (prestige) modes ---------------------------------------
+
+def _grades():
+    return [t.EliteGrade(1, "iron", 1, True), t.EliteGrade(5, "iron", 2),
+            t.EliteGrade(10, "bronze", 1, True), t.EliteGrade(20, "prestige", -1, True)]
+
+
+def _elite_snap(rewards=None, grades=None, level=12):
+    return t.VehicleSnapshot(
+        tier=11, is_elite=True, vehicle_xp=99999, free_xp=500,
+        has_prestige=True, elite_level=level, elite_max_level=20,
+        elite_grades=grades if grades is not None else _grades(),
+        elite_rewards=rewards or [])
+
+
+def test_elite_rewards_mode_when_rewards_unearned():
+    snap = _elite_snap(rewards=[t.EliteReward(50, True), t.EliteReward(100, False)])
+    m = build_model(snap)
+    assert m.mode == t.Mode.ELITE_REWARDS
+    assert m.elite_level == 12
+    assert m.elite_max_level == 20
+    assert m.fill_free == 0                 # single segment in elite modes
+    assert m.combat_xp == 99999             # cumulative combat XP, not +free
+
+
+def test_elite_grade_mode_when_all_rewards_earned():
+    snap = _elite_snap(rewards=[t.EliteReward(50, True), t.EliteReward(100, True)])
+    m = build_model(snap)
+    assert m.mode == t.Mode.ELITE
+    assert m.elite_grade == "bronze"
+
+
+def test_elite_grade_mode_when_no_rewards():
+    snap = _elite_snap(rewards=[])
+    m = build_model(snap)
+    assert m.mode == t.Mode.ELITE
+    assert m.elite_grade == "bronze"
+
+
+def test_no_prestige_data_falls_back_to_complete():
+    snap = t.VehicleSnapshot(tier=10, is_elite=True, vehicle_xp=0, free_xp=0,
+                             has_prestige=False)
+    m = build_model(snap)
+    assert m.mode == t.Mode.COMPLETE
+
+
+def test_field_mods_take_priority_over_prestige():
+    # remaining field mods must win even when prestige data is present.
+    snap = t.VehicleSnapshot(
+        tier=10, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[_step(1, 2000)],
+        has_prestige=True, elite_level=5, elite_max_level=20,
+        elite_grades=_grades(),
+        elite_rewards=[t.EliteReward(50, False)])
+    m = build_model(snap)
+    assert m.mode == t.Mode.FIELD_MODS
