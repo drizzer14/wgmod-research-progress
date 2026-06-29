@@ -1,35 +1,46 @@
 # Session Handoff — Research-Progress Bar (Phase 2, in-game working)
 
-_Updated 2026-06-29 (emblem-look session). Read tools/dev/README.md for the dev
-loop. **THIS SESSION replaced the translucent ELITE grade-emblem hexagons with the
-battle score-panel CHEVRON BADGES** (owner's reference). JS/CSS-only, deployed to
-the overlay, owner verifying live. Direction is APPROVED; two visual polish items
-remain (below) before it's signed off. See "## Battle score-panel chevron badges"._
+_Updated 2026-06-29 (carousel-tooltip-emblem session). Read tools/dev/README.md for
+the dev loop. **THIS SESSION retired the chevron badges and made the ELITE grade
+ticks match the hangar carousel vehicle tooltip EXACTLY** — the solid hexagon
+prestige emblem + emblemFont level digits. Also fixed the real translucency bug and
+lit up the dark tech-tree/reward icons. JS/CSS-only, owner-verified in-game. See
+"## Carousel-tooltip hexagon emblems"._
 
-**State at handoff: this session's chevron-badge work is COMMITTED** (JS/CSS +
-handoff; the prior bug-fix session is already committed at `e932752`/`3e17f30`).
-44 pytest green; no Python touched this session. Overlay is in sync with the source.
+**State at handoff: NOT yet committed** — the JS/CSS changes are owner-verified live
+and ready to commit (the prior chevron + bug-fix sessions are committed at
+`df0ec95`/`e932752`/`3e17f30`). 44 pytest green; no Python touched this session.
 
-**OPEN (owner-set, NEXT SESSION) — two polish items on the chevron badges, then
-tier-XI:**
-1. **Stacking "still not enough."** `BADGE_OPACITY_LAYERS=13` reads better but the
-   owner wants the badges even more solid. Push the layer count higher and/or find a
-   crisper opacity approach. (Effective alpha = 1-(1-0.28)^N; N=13 ≈ 0.985 already,
-   so more layers give diminishing returns — may need a different lever, e.g. a
-   contrast/brightness filter, or the hexagon-stacking idea below.)
-2. **"Achieved levels look 'achievable', not 'achieved'."** The `.wg-state-*`
-   treatment doesn't make EARNED ticks read as done vs the next/upcoming ones.
-   Current: achieved=gold-halo, next=white-halo, upcoming=grayscale+dim — too subtle.
-   Need a stronger earned/locked contrast (brighten+saturate achieved, harder
-   desaturate/dim not-yet, or an explicit "done" indicator). Check whether the `tab`
-   art has state variants; the skillTree set DOES (`emblem_available/current/disable`).
-3. **Owner idea — STACK THE OLD HEXAGON EMBLEMS** (`prestige/emblem/72x72/...`) with
-   the same `stackedBg` trick and A/B it against the chevron badges (see dedicated
-   note below).
+**THE TRANSLUCENCY BUG (root cause, now fixed — KEY LESSON):** the owner's
+long-standing "badges look translucent even when achieved" was NOT the asset. The
+elite tick's container `.wg-elite-tick` (the `mark`) had `opacity: 0.65` (intended
+only to keep the thin tick LINE subtle). **CSS opacity on a parent establishes a
+stacking context that CAPS the whole subtree** — so the badge child could never
+exceed 65% opacity no matter its own `opacity: 1`. Every elite badge (chevron AND
+emblem) rendered at 0.65 → translucent; this is also why last session's 13×
+`stackedBg` chevron stacking never looked fully solid. Fix: keep the tick line
+subtle via a translucent **background color** `rgba(178,175,171,0.65)` and set the
+mark's own `opacity: 1`. (Lesson: never use element `opacity` on an ancestor of art
+you want opaque — use rgba/background alpha instead.)
 
-AFTER the emblem look: the longstanding **TIER-XI UPGRADES ("vehicle skill tree")
-progression** roadmap item (research pre-collected in "Tier-XI upgrades"; owner
-can't visually verify it yet — develop vs decompiled source + REPL, defer sign-off)._
+**ALSO this session:** measured the prestige emblem PNGs — the **hexagon `emblem`
+art is SOLID** (~245/255 mean alpha over the shape, both 48x48 and 72x72; verified by
+decoding + viewing the PNGs). The prior "emblems are translucent-by-design / mesh
+interior" note was a MISDIAGNOSIS — the genuinely translucent art is the *chevron
+`tab`* set (~76/255, 1% opaque), which is why only IT needed stacking. So the emblem
+is drawn ONCE, no stacking.
+
+**OPEN (owner-set, NEXT):**
+1. **Tick STATE MACHINE (owner will revisit, deferred by owner).** Owner reports
+   **`grayscale()` desaturation "doesn't work — looks perfectly normal"** in their
+   client (contradicts the old handoff claim that grayscale renders — TRUST THE LIVE
+   OBSERVATION). So the achieved/next/upcoming/locked contrast needs reworking with
+   levers that DO render: **brightness + opacity** (both confirmed) and light/dark
+   `drop-shadow` glows. Don't rely on grayscale. (The stale "grayscale confirmed to
+   render" comment in WGModResearch.css is now suspect.)
+2. **TIER-XI UPGRADES ("vehicle skill tree") progression** — the longstanding next
+   feature (research pre-collected in "Tier-XI upgrades"; owner can't visually verify
+   yet — develop vs decompiled source + REPL, defer sign-off)._
 
 ## Bug-fix session (deployed; fixes 1-3 owner-CONFIRMED in-game)
 Diverted from tier-XI to fix owner-reported bugs.
@@ -70,54 +81,57 @@ Diverted from tier-XI to fix owner-reported bugs.
   `execfile` a script) dumps the live model's per-tick icon/state — used it to
   confirm exactly which emblem URLs/states were being produced.
 
-## Battle score-panel chevron badges (THIS SESSION — deployed, owner verifying)
-Replaced the translucent hexagon grade emblems on the ELITE bar with the in-game
-battle score-panel prestige badge (owner's reference screenshots). All JS/CSS in
-`WGModResearch.js`/`.css`; data was already on the tick (no Python change).
+## Carousel-tooltip hexagon emblems (THIS SESSION — owner-verified in-game)
+Owner directive: make the ELITE grade ticks look **exactly like the prestige badge
+in the hangar carousel vehicle tooltip**, and **not translucent when achieved**. The
+chevron-badge detour from last session is fully retired. All JS/CSS; data was already
+on the tick (no Python change). The translucency was the `.wg-elite-tick` opacity-cap
+bug above (NOT the asset).
 
-**The asset** = `img://gui/maps/icons/prestige/tab/<grade>/<short|medium|long>/<sub>.png`
-(all 36×16) — a grade-colored CHEVRON glyph whose left region is a dark plate the
-LEVEL NUMBER sits on (the art carries no number):
-- grade family → chevron color: **iron #7a8387, bronze #ad6b45, silver #849ed3,
-  gold #e3b770, enamel #fbbb57** (sampled from the art; numbers are tinted to match,
-  per owner request — `.wg-grade-<fam> .wg-tick-badge-num`).
-- sub-grade 1..4 → chevron count (1/2/3 chevrons, 4 = solid filled).
-- short|medium|long → underline width for a 1/2/3-digit number.
-- **MAX ("prestige")** tick = the single `tab/prestige.png` (gold hexagon + chevron,
-  no number) — matches the in-game MAX badge. Detected via `isPrestigeEmblem()`
-  (emblem icon ends `…/prestige.png`); the five families come from `gradeFamily()`
-  parsing the emblem icon URL.
+**Ground truth (verified by extracting the game's own bundle from
+`res/packages/gui-part*.pkg`):** the carousel tooltip badge is the game component
+`PrestigeProgressSymbol` (`gui/gameface/_dist/production/lobby/prestige/
+sharedComponents/PrestigeProgressSymbol/PrestigeProgressSymbol.css`). It is dead
+simple — a single hexagon-emblem PNG as `background: no-repeat center / contain`,
+**no backing, no glow, no `mix-blend-mode`, no stacking.** The level number is the
+sibling `PrestigeProgressLabel`: a row of grade-colored **emblemFont** digit-glyph
+PNGs. (Agent guesswork about a `mix-blend-mode: screen` solidity trick was WRONG —
+that was the full-screen `elite_window` celebration popup with animated rays, a
+different context.)
 
-**Why they looked translucent + the fix (KEY FINDING):** the tab art is drawn at
-only **~28% mean alpha** (meant to sit on the dark battle panel — dark plate blends,
-gold chevrons still read over black). On our bright hangar a single draw washes out.
-Fix = `stackedBg(url)`: set `background-image` to the SAME url repeated
-`BADGE_OPACITY_LAYERS` (=13) times — N identical layers composite up to ~opaque
-(`1-(1-α)^N`) with **no CSS backing and shape unchanged**; the asset's own dark
-plate then supplies the contrast, exactly like the battle panel. (Owner REJECTED a
-CSS rounded dark plate — "disgusting" — so do NOT reintroduce one; the opacity must
-come from the art itself.)
+**What the bar does now (matches the tooltip):**
+- grade tick → the solid hexagon emblem `img://gui/maps/icons/prestige/emblem/72x72/
+  <family>/<sub>.png` (already on the tick as `t.icon` from `elite.py` `_EMBLEM_BASE`),
+  drawn ONCE via `.wg-tick-emblem` `background-image` (no `stackedBg`).
+- level number → `emblemNumber(level, family)` builds a flex row of
+  **`.wg-emblem-digit`** divs, each backed by `img://gui/maps/icons/prestige/
+  emblemFont/16x33/<fam>/<digit>.png` (the game's own grade-colored digit glyphs).
+  Family map: `emblemFontFamily()` sends **enamel → gold** (emblemFont ships
+  iron/bronze/gold/silver only — no enamel; matches the old amber tint). Digit box
+  `5.5rem × 11rem`, the `"1"` glyph narrowed to `4rem` (`.wg-emblem-digit-one`,
+  mirrors the game's `letter__s1`). A drop-shadow keeps the soft glyph edges legible.
+- **MAX ("prestige")** tick → `…/emblem/72x72/prestige.png` (gold hexagon), shown
+  numberless — its icon has no grade family, so `gradeFamily()` returns "" and
+  `emblemNumber` is skipped. Matches the in-game MAX badge.
+- Retired: `tabChevronUrl`, `isPrestigeEmblem`, `PRESTIGE_TAB_URL`, `stackedBg`,
+  `BADGE_OPACITY_LAYERS`, and all `.wg-tick-badge*` / `.wg-grade-* .wg-tick-badge-num`
+  CSS. `gradeFamily()` + `GRADE_FAMILIES` are KEPT (now used for the emblemFont
+  family + a `wg-grade-<fam>` class hook).
 
-**Layout knobs (CSS `.wg-tick-badge`):** box `46rem × 17rem` (wider than the
-contained art so `background-position: 85%` has slack to push the chevrons right —
-a position % does nothing without that slack, which is why an earlier offset
-"didn't work"); number `.wg-tick-badge-num` over the left 56%, right-aligned.
-State filters (`.wg-state-achieved/next/upcoming`) now also target `.wg-tick-badge`.
+**Dark tech-tree + reward icons "lift off" the dark background (owner request, NO
+plates):** the vehicle tech-tree node renders and the tier-XI reward thumbnails are
+dark realistic art that blended into the dark area below the bar. **Owner explicitly
+rejected backing plates** (rounded `background-color` rects — do NOT add them). Fix =
+swap the base DARK `drop-shadow` for a **LIGHT glow that hugs the silhouette**:
+`#wgmod-root .wg-cat-vehicle .wg-tick-img { filter: drop-shadow(0 0 2.5rem
+rgba(245,240,232,0.85)) drop-shadow(0 1rem 2rem rgba(0,0,0,0.55)); }` and the same on
+`.wg-state-upcoming .wg-tick-reward`. Owner CONFIRMED "icons stand out." (Module
+glyphs were left alone — flat symbolic icons, and their 96rem-wide box would make a
+plate/treatment look like a bar.)
 
-**Owner verdict so far:** chevrons read MUCH more solid; numbers matching the grade
-color = good; offset now works. REMAINING (next session, see top OPEN list): stack
-even more / find a stronger opacity lever; and make ACHIEVED ticks read as earned
-(not merely "achievable").
-
-## NEXT-SESSION IDEA (owner-requested): stack the OLD hexagon emblems
-The opacity-stacking trick that fixed the chevron badges (drawing the SAME image as
-N identical background layers so a low-alpha asset composites up to near-opaque --
-see `stackedBg`/`BADGE_OPACITY_LAYERS` in WGModResearch.js) might also rescue the
-PREVIOUSLY-USED translucent hexagon grade emblems (`prestige/emblem/72x72/...`).
-Owner: "I want to try stacking previously used icons, maybe it will look even
-better." Worth A/B-ing the stacked hexagon emblem against the current chevron-badge
-look. (NB those emblems were ~translucent-by-design too; stacking may make them read
-solid the same way it did for the tab chevrons.)
+**Owner verdict:** badges now match the tooltip and are solid; digit size tuned down
+to match; dark icons stand out. Signed off in-game. Remaining = the tick state
+machine (see OPEN #1) and tier-XI.
 
 ## Elite emblem look (was UNRESOLVED — chevron-badge approach now in progress)
 SUPERSEDED by the battle score-panel CHEVRON BADGE work below; kept for context.
