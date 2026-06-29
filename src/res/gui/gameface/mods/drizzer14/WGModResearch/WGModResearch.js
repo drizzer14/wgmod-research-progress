@@ -223,6 +223,16 @@ function render(model) {
         return;
     }
 
+    // Show the bar ONLY in the plain garage. Python pushes visible=false while a
+    // tank-setup / ammo loadout overlay is open (the params panel stays mounted to
+    // show stat changes, so the bar would otherwise linger over it). An absent flag
+    // (older Python build) is treated as visible -- fail open.
+    if (data.visible === false) {
+        root.style.display = "none";
+        return;
+    }
+    root.style.display = "";
+
     // Elite Levels (prestige) modes own the whole header + bar (grade/reward
     // readout, single-segment fill, combat-XP star), so they branch out early.
     if (data.mode === "elite" || data.mode === "elite_rewards") {

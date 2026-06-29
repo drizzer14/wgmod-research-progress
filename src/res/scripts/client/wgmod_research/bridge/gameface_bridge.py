@@ -13,6 +13,8 @@ was verified live in the EU 2.3 client.
 from frameworks.wulf import ViewModel, Array
 from debug_utils import LOG_CURRENT_EXCEPTION, LOG_NOTE
 from CurrentVehicle import g_currentVehicle
+from helpers import dependency
+from skeletons.gui.game_control import ILoadoutController
 
 from wgmod_research.adapter import engine_adapter
 from wgmod_research.domain.builder import build_model
@@ -34,6 +36,10 @@ _active = None
 # so the membership check below stays stable across re-arms.
 _listener = None
 
+# Our handler for tank-setup (loadout) open/close. Same strong-ref + self-healing
+# rationale as the vehicle listener above.
+_loadout_listener = None
+
 
 def _on_vehicle_changed(*args, **kwargs):
     try:
@@ -41,6 +47,28 @@ def _on_vehicle_changed(*args, **kwargs):
         LOG_NOTE("[wgmod] onChanged -> refresh ok=%s" % ok)
     except Exception:
         LOG_CURRENT_EXCEPTION()
+
+
+def _on_interactor_updated(*args, **kwargs):
+    # The loadout interactor was set (tank-setup / ammo overlay opened) or cleared
+    # (back to the plain garage). Re-push so the bar hides / shows accordingly.
+    try:
+        refresh()
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+
+
+def _bar_visible():
+    """True only in the plain garage. The tank-setup overlays (shells/ammo,
+    consumables, equipment, optional devices) keep the vehicle-params panel mounted
+    to show stat changes, so the bar must be hidden explicitly while one is open.
+    A live loadout interactor is exactly that 'a setup overlay is open' signal.
+    Guarded -> True (fail open: show the bar) if the controller is unreadable."""
+    try:
+        return dependency.instance(ILoadoutController).interactor is None
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+        return True
 
 
 def install_vehicle_listener():
@@ -59,6 +87,22 @@ def install_vehicle_listener():
         if _listener not in g_currentVehicle.onChanged:
             g_currentVehicle.onChanged += _listener
             LOG_NOTE("[wgmod] vehicle listener (re)armed")
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+
+
+def install_loadout_listener():
+    """Ensure our handler is subscribed to loadout interactor changes, so the bar
+    hides/shows as the tank-setup (ammo) overlay opens/closes. Self-healing and
+    idempotent, same as install_vehicle_listener -- safe to call on every mount."""
+    global _loadout_listener
+    if _loadout_listener is None:
+        _loadout_listener = _on_interactor_updated
+    try:
+        ctrl = dependency.instance(ILoadoutController)
+        if _loadout_listener not in ctrl.onInteractorUpdated:
+            ctrl.onInteractorUpdated += _loadout_listener
+            LOG_NOTE("[wgmod] loadout listener (re)armed")
     except Exception:
         LOG_CURRENT_EXCEPTION()
 
@@ -112,7 +156,7 @@ class TickVM(ViewModel):
 
 
 class ResearchVM(ViewModel):
-    def __init__(self, properties=14, commands=0):
+    def __init__(self, properties=15, commands=0):
         super(ResearchVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -131,6 +175,7 @@ class ResearchVM(ViewModel):
         self._addStringProperty("eliteGrade", "")    # 11 (grade family id)
         self._addNumberProperty("eliteSub", 0)       # 12 (current sub-grade 1..4)
         self._addNumberProperty("combatXp", 0)       # 13 (cumulative combat XP)
+        self._addBoolProperty("visible", True)        # 14 (false hides the bar)
 
     def setMode(self, v):
         self._setString(0, v)
@@ -173,6 +218,9 @@ class ResearchVM(ViewModel):
 
     def setCombatXp(self, v):
         self._setNumber(13, v)
+
+    def setVisible(self, v):
+        self._setBool(14, v)
 
     @staticmethod
     def getTicksType():
@@ -218,6 +266,7 @@ def push(rvm, host_vm=None):
         LOG_NOTE("[wgmod] push mode=%s ticks=%d fillV=%d fillF=%d" % (
             model.mode, len(model.ticks), model.fill_vehicle, model.fill_free))
         with rvm.transaction() as tx:
+            tx.setVisible(_bar_visible())
             tx.setMode(model.mode)
             tx.setScaleMin(model.scale_min)
             tx.setScaleMax(model.scale_max)
