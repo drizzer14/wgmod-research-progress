@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
 """
+DEPRECATED for WoT 2.3+: the client no longer loads loose `res_mods/<version>/`
+*scripts* — only `.wotmod` packages in `mods/<version>/` run. Use
+`build/deploy_wotmod.py` instead (it builds + deploys a clean package). This
+script is kept only for the JS/CSS gameface-asset overlay flow used by
+`tools/dev/sync_gameface.py`, which DOES still load.
+
 Deploy src/res/ into a WoT install's res_mods/<version>/ as plain .py for fast,
 compile-free iteration. Run this on the PC where WoT is installed.
 

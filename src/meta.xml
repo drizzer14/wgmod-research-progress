@@ -4,6 +4,10 @@
     <id>com.drizzer14.wgmod</id>
     <!-- Compared character-by-character (ASCII). Use zero-padded segments. -->
     <version>0.1.0</version>
-    <name>WGMod</name>
-    <description>A World of Tanks mod. Replace this description.</description>
+    <name>Research Progress Bar</name>
+    <description>Adds a progress bar to the Garage that shows the selected vehicle's progression at a glance: tech-tree research, Field Modifications, the Elite Levels (prestige) grades and tier-XI reward track, and tier-XI vehicle skill-tree upgrades. Real in-game icons and hover tooltips. Updates live when you switch vehicles.
+
+REQUIRES OpenWG Gameface (install it first) — without it the bar will not appear.
+
+Author: drizzer14</description>
 </root>

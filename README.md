@@ -1,64 +1,86 @@
-# WGMod — Garage Research-Progress Bar
+# Research Progress Bar — World of Tanks mod
 
-A World of Tanks mod that shows the selected vehicle's research progress as a
-Garage progress bar. Authored on macOS, tested/installed on a Windows PC.
+Adds a Garage progress bar that shows the selected vehicle's progression — tech-tree
+research, Field Modifications, Elite Levels (prestige) grades + tier-XI reward track,
+and tier-XI vehicle skill-tree upgrades — using the game's own icons and live updates.
 
-> **Continuing this project?** Start with **[`PHASE2-HANDOFF.md`](./PHASE2-HANDOFF.md)** —
-> Phase 1 (the domain layer) is done and tested; Phase 2 (engine + UI integration)
-> runs on the Windows PC.
->
-> Design: [`docs/superpowers/specs/`](./docs/superpowers/specs/) · Plan:
-> [`docs/superpowers/plans/`](./docs/superpowers/plans/) · WoT modding background:
-> [`RESEARCH.md`](./RESEARCH.md).
+Target client: **WoT EU 2.3.0.1**. Hard dependency: **OpenWG GameFace**.
 
-## Layout
+## For players (installing)
+
+See **[`INSTALL.md`](./INSTALL.md)**. The distributable is built to
+`dist/com.drizzer14.wgmod_<version>.wotmod` (plus a ready-to-share
+`dist/Research-Progress-Bar_<version>.zip` containing the `.wotmod` + a plain-text
+install guide).
+
+## For developers
+
+> **Continuing this project?** Read **[`docs/superpowers/SESSION-HANDOFF.md`](./docs/superpowers/SESSION-HANDOFF.md)**
+> first (architecture, dev loop, gotchas, icon paths), then
+> [`tools/dev/README.md`](./tools/dev/README.md).
+
+### Layout
 
 ```
 src/
-  meta.xml                                  # .wotmod metadata (id, version, name)
-  res/scripts/client/gui/mods/mod_wgmod.py  # mod entry point (loaded at startup)
+  meta.xml                                         # .wotmod metadata (id, version, name, description)
+  res/scripts/client/gui/mods/mod_wgmod.py         # entry point: patches the hangar presenter
+  res/scripts/client/wgmod_research/               # domain (engine-free) + adapter + bridge
+  res/gui/gameface/mods/drizzer14/WGModResearch/   # widget JS + CSS (rendered via OpenWG GameFace)
 build/
-  build_wotmod.py    # compile + package -> dist/<id>_<version>.wotmod  (Python 2.7!)
-  deploy_dev.py      # copy src/res into a WoT res_mods/<version> for live testing
+  build_wotmod.py    # compile (.py->.pyc) + package -> dist/<id>_<version>.wotmod   (Python 2.7!)
+  deploy_wotmod.py   # clean + build + copy the .wotmod into a WoT install            (Python 2.7!)
+  deploy_dev.py      # DEPRECATED — loose res_mods scripts do NOT load in WoT 2.3; use deploy_wotmod.py
+tests/               # pytest (run with Python 3.13) for the domain layer
+tools/dev/           # debug REPL server/client (NOT shipped) + dev notes
 dist/                # build output (gitignored)
 ```
 
-`src/res/` mirrors the game's `res/` tree, so the same source feeds both the
-dev deploy and the packaged build.
+### Build a distributable package (Python 2.7.18)
 
-## Workflow
-
-**Author (macOS):** edit `src/`, commit, push to the private GitHub repo.
-
-**Test (Windows PC):**
-```sh
-git pull
-python build/deploy_dev.py "C:/Games/World_of_Tanks" <client-version>
-# launch WoT; plain .py runs from res_mods/ — no compile step
-```
-Tip: create `deploy.local.json` (gitignored) so you can run `deploy_dev.py` with
-no args:
-```json
-{ "wot_path": "C:/Games/World_of_Tanks", "version": "2.3.0.1" }
-```
-
-**Package for distribution (Windows PC, Python 2.7.18):**
 ```sh
 python build/build_wotmod.py        # -> dist/com.drizzer14.wgmod_0.1.0.wotmod
 ```
-Copy the `.wotmod` into `World_of_Tanks/mods/<client-version>/` to install, or
-upload to wgmods.net.
+
+### Build + deploy into a local WoT install (Python 2.7.18, client CLOSED)
+
+```sh
+python build/deploy_wotmod.py "D:/Games/World_of_Tanks_EU" 2.3.0.1
+# or create deploy.local.json (gitignored): { "wot_path": "...", "version": "2.3.0.1" }
+python build/deploy_wotmod.py
+```
+
+`deploy_wotmod.py` removes old `<id>_*.wotmod` and any loose `res_mods` leftovers
+(which would otherwise shadow the package) before building and copying the fresh
+`.wotmod` in. Fully restart the client afterwards.
+
+### Run the tests (Python 3.13)
+
+```sh
+python -m pytest -q
+```
+
+### JS/CSS-only changes (hot reload, no relaunch)
+
+```sh
+python tools/dev/sync_gameface.py "<install>" 2.3.0.1
+# then in-game: switch to another screen and back to the Garage
+```
 
 ## Important constraints
 
-- **WoT is Windows-only** — the Mac is authoring only; all testing is on the PC.
 - **`.pyc` must be built with Python 2.7.18.** Bytecode is version-locked (not
-  OS-locked), so building on the PC's 2.7 is the safe path. Python 3 bytecode
-  will not load.
+  OS-locked). Python 3 bytecode will not load in the client. Tests run on Python 3.13.
 - `.wotmod` is a **stored (uncompressed) ZIP** with `meta.xml` at the root —
   `build_wotmod.py` handles this.
+- **WoT 2.3 loads mods only from `.wotmod` in `mods/<version>/`.** `res_mods/<version>/`
+  outranks `.wotmod`, so a stale loose copy silently shadows the package — always
+  deploy via `deploy_wotmod.py` and keep `res_mods` clean for ship verification.
+- This build targets the **Wargaming EU/global** client, not the Lesta/Mir Tankov (RU) fork.
 
 ## Renaming the mod
 
-Change the `<id>`, `<version>`, `<name>` in `src/meta.xml`, rename
-`mod_wgmod.py`, and update `MOD_NAME`/`MOD_VERSION` inside it.
+Change `<id>`, `<version>`, `<name>`, `<description>` in `src/meta.xml`, and update
+`MOD_NAME`/`MOD_VERSION` in `src/res/scripts/client/gui/mods/mod_wgmod.py`. Changing
+`<id>` also changes the output `.wotmod` filename and the cleanup glob in
+`deploy_wotmod.py`.
