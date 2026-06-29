@@ -1,15 +1,15 @@
 # Session Handoff — Research-Progress Bar (Phase 2, in-game working)
 
-_Updated 2026-06-29 (carousel-tooltip-emblem session). Read tools/dev/README.md for
-the dev loop. **THIS SESSION retired the chevron badges and made the ELITE grade
-ticks match the hangar carousel vehicle tooltip EXACTLY** — the solid hexagon
-prestige emblem + emblemFont level digits. Also fixed the real translucency bug and
-lit up the dark tech-tree/reward icons. JS/CSS-only, owner-verified in-game. See
-"## Carousel-tooltip hexagon emblems"._
+_Updated 2026-06-29 (tier-XI skill-tree session). Read tools/dev/README.md for the
+dev loop. **THIS SESSION added the tier-XI "vehicle skill tree" upgrade mode**
+(`Mode.SKILL_TREE`) — a Python domain+adapter change. Owner directive: an **XP
+readout, no per-node detail**. See "## Tier-XI skill-tree mode (THIS SESSION)". The
+prior carousel-tooltip-emblem session is COMMITTED at `58490a0` (owner-verified)._
 
-**State at handoff: NOT yet committed** — the JS/CSS changes are owner-verified live
-and ready to commit (the prior chevron + bug-fix sessions are committed at
-`df0ec95`/`e932752`/`3e17f30`). 44 pytest green; no Python touched this session.
+**State at handoff: SKILL_TREE code complete, NOT yet committed** — 53 pytest green
+(44 + 9 new), 2.7-compiles clean. NOT yet deployed/REPL-verified (Python change →
+needs build+deploy+relaunch, then REPL introspection on a real skill-tree vehicle;
+owner has no un-upgraded tier-XI tank for visual sign-off — defer it).
 
 **THE TRANSLUCENCY BUG (root cause, now fixed — KEY LESSON):** the owner's
 long-standing "badges look translucent even when achieved" was NOT the asset. The
@@ -41,6 +41,73 @@ is drawn ONCE, no stacking.
 2. **TIER-XI UPGRADES ("vehicle skill tree") progression** — the longstanding next
    feature (research pre-collected in "Tier-XI upgrades"; owner can't visually verify
    yet — develop vs decompiled source + REPL, defer sign-off)._
+
+## Tier-XI skill-tree mode (THIS SESSION — code complete, not yet deployed)
+Tier-XI vehicles are reached by **upgrading** a tier-X via a branching **vehicle
+skill tree** (post-progression tree id ≥ `VEH_SKILL_TREE_ID_OFFSET`=10000), NOT the
+linear field-mod ladder. They previously rendered as a garbled/empty FIELD_MODS bar
+because `_read_post_progression` assumes leveled steps. New `Mode.SKILL_TREE` fixes
+that. **Owner directive: show an XP readout, NO per-node detail** (owner picked no
+option in the framing question, noting "xp readout, no need to keep per-node detail"
+— so the rich per-node-tick option was dropped).
+
+**What it does:** the 2-D tree is projected to the bar as an **aggregate** — axis =
+total **XP remaining to fully upgrade** (sum of unreceived node prices), fill =
+banked spendable XP (vehicle + free, two stacked segments, same as FIELD_MODS),
+header = **"Vehicle Upgrades N/M"** node counter + the existing Total-XP readout.
+**No ticks** (single fill bar). This mirrors the remaining-cost framing of
+TECH_TREE/FIELD_MODS. Once fully upgraded, `skilltree.resolve()` returns None and the
+bar falls through to ELITE_REWARDS → ELITE → COMPLETE (a skill-tree vehicle still has
+prestige afterward).
+
+**Builder precedence:** TECH_TREE (modules unresearched) → **SKILL_TREE** (if
+`is_skill_tree` and remaining XP > 0) → FIELD_MODS (linear; non-skill-tree elites) →
+ELITE_REWARDS → ELITE → COMPLETE. SKILL_TREE replaces FIELD_MODS only for skill-tree
+vehicles.
+
+**Code (mirrors the ELITE structure):**
+- `domain/types.py`: `Mode.SKILL_TREE`; snapshot fields `is_skill_tree`,
+  `skilltree_remaining_xp`, `skilltree_done`, `skilltree_total`. The node counter
+  REUSES the model's existing `fieldmods_done/total` fields (so no new bridge/JS
+  plumbing — the bridge already pushes those + `mode`).
+- `domain/resolvers/skilltree.py` (new, pure): `resolve(snapshot)` → dict
+  `{scale_min, scale_max=remaining, fill=veh+free, done, total}`, or **None** when
+  not a skill-tree vehicle / fully upgraded.
+- `domain/builder.py`: SKILL_TREE branch after TECH_TREE, before FIELD_MODS.
+- `adapter/engine_adapter.py`: `_is_skill_tree(veh)` =
+  `veh.postProgression.isVehSkillTree()` (guarded); `_read_skill_tree(veh)` iterates
+  `iterOrderedSteps()` summing **unreceived** node `getPrice().xp` for remaining,
+  counting **priced non-ghost** nodes for done/total; `_read_post_progression`
+  early-returns empties for skill-tree vehicles so FIELD_MODS never triggers. New
+  fields wired into BOTH the read site AND the `VehicleSnapshot(...)` call (the
+  `elite_level_xp` KeyError trap).
+- `WGModResearch.js`: `skill_tree` → label "Vehicle Upgrades", `CAT_ICON` reuses the
+  fieldModification glyph (swap if a dedicated post-progression icon is wanted),
+  `root.className="wg-skill"` hook. Empty `ticks[]` → the existing tick loop draws
+  nothing. No CSS change required (default combat-XP fill tone).
+- Tests: `tests/test_resolver_skilltree.py` (4) + 5 builder tests (mode, priority
+  over field mods, tech-tree still wins, fully-upgraded → ELITE / COMPLETE). 53 green.
+
+**Verified data shapes (decompiled EU `C:\Users\…\wot-eu`, branch 2.3):** detect via
+`veh.postProgression.isVehSkillTree()`. Steps from `iterOrderedSteps()` =
+`PostProgressionStepItem`: `stepID`, `getPrice().xp`, `isReceived()`, `getType()`
+(`major/special/final/common/ghost`), `getParentStepIDs()`, `action`. Whole-tree:
+`len(getState().unlocks)` / `len(getRawTree().steps)` (we instead count via the
+iterator), `getCompletion()`→`EMPTY/PARTIAL/FULL`, `getCheapestAvailablePerk(veh)`.
+
+**REMAINING (next session):**
+1. **Deploy + REPL-verify.** Build+deploy `.wotmod` (Python 2.7, client closed) +
+   `sync_gameface`, relaunch. Then on a real skill-tree vehicle dump via the REPL:
+   `isVehSkillTree()`, `iterOrderedSteps()` shapes, the computed `(remaining, done,
+   total)`; cross-check the `python.log` `push mode=skill_tree …` line. **Two reads
+   are best-effort guesses to confirm live:** (a) does `getType()` actually return
+   the bare string `"ghost"` (vs an enum) — if it's an enum, the `== "ghost"` skip
+   silently never fires (harmless: ghosts likely have xp 0 and are skipped anyway);
+   (b) confirm purchasable nodes really carry `getPrice().xp > 0` and ghosts/free
+   nodes are 0 (the done/total counter depends on it).
+2. **Visual sign-off deferred** — owner has no un-upgraded tier-XI tank.
+3. Pick a fill tone / dedicated header icon for the upgrade bar if the default reads
+   wrong once seen live (all hot-reloadable JS/CSS).
 
 ## Bug-fix session (deployed; fixes 1-3 owner-CONFIRMED in-game)
 Diverted from tier-XI to fix owner-reported bugs.

@@ -40,7 +40,10 @@ def build_snapshot():
     free_xp = _safe_int(lambda: stats.freeXP, 0) if stats is not None else 0
     unlocks = _safe(lambda: stats.unlocks, set()) if stats is not None else set()
 
+    is_skill_tree = _is_skill_tree(veh)
     fm_steps, fm_done, fm_total = _read_post_progression(veh)
+    st_remaining, st_done, st_total = (
+        _read_skill_tree(veh) if is_skill_tree else (0, 0, 0))
     prestige = _read_prestige(veh)
 
     return t.VehicleSnapshot(
@@ -61,7 +64,10 @@ def build_snapshot():
         elite_rewards=prestige["elite_rewards"],
         # .get() so a future missing prestige key degrades gracefully instead of
         # raising and blanking the whole bar (see _prestige_defaults).
-        elite_level_xp=prestige.get("elite_level_xp", {}))
+        elite_level_xp=prestige.get("elite_level_xp", {}),
+        is_skill_tree=is_skill_tree,
+        skilltree_remaining_xp=st_remaining,
+        skilltree_done=st_done, skilltree_total=st_total)
 
 
 # --- helpers ---------------------------------------------------------------
@@ -120,6 +126,61 @@ def _read_tech_unlocks(veh, unlocks):
         return []
 
 
+def _is_skill_tree(veh):
+    """True for a tier-XI "vehicle skill tree" upgrade vehicle (branching
+    post-progression, tree id >= VEH_SKILL_TREE_ID_OFFSET=10000). Best-effort:
+    any failure -> False, so the vehicle is treated as an ordinary (linear
+    field-mod) post-progression vehicle. Verified: gui_items Vehicle exposes
+    .postProgression, whose model has isVehSkillTree()."""
+    try:
+        if not veh.isPostProgressionExists:
+            return False
+        return bool(veh.postProgression.isVehSkillTree())
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+        return False
+
+
+def _read_skill_tree(veh):
+    """Aggregate the branching skill tree into (remaining_xp, done, total) -- no
+    per-node detail (owner directive). remaining_xp is the XP still needed to fully
+    upgrade (sum of the unreceived nodes' prices); done/total count the priced,
+    non-ghost nodes researched vs. available, for the header N/M counter.
+
+    Steps come from the same veh.postProgression.iterOrderedSteps() the linear
+    reader uses, but here each is a tree node: getPrice().xp, isReceived(),
+    getType() ('major'/'special'/'final'/'common'/'ghost'). 'ghost' nodes are
+    layout placeholders and zero-price nodes aren't purchasable, so neither counts.
+    Fully guarded -> (0, 0, 0) on any failure (bar falls back to COMPLETE)."""
+    remaining_xp = 0
+    done = 0
+    total = 0
+    try:
+        pp = veh.postProgression
+        for step in pp.iterOrderedSteps():
+            try:
+                node_type = _safe(lambda: step.getType(), "") or ""
+                if node_type == "ghost":
+                    continue
+                price = step.getPrice()
+                xp_cost = int(getattr(price, "xp", 0) or 0)
+                if xp_cost <= 0:
+                    continue  # not a purchasable upgrade node
+                received = bool(step.isReceived())
+                total += 1
+                if received:
+                    done += 1
+                else:
+                    remaining_xp += xp_cost
+            except Exception:
+                LOG_CURRENT_EXCEPTION()
+                continue
+        return remaining_xp, done, total
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+        return 0, 0, 0
+
+
 def _read_post_progression(veh):
     """Read the vehicle's post-progression into (field_mod_steps, fm_done,
     fm_total), all clamped to the tier's level cap (the engine lists greyed
@@ -139,6 +200,13 @@ def _read_post_progression(veh):
     fm_total = 0
     try:
         if not veh.isElite or not veh.isPostProgressionExists:
+            return steps, 0, 0
+        # Tier-XI vehicles use a branching skill tree, not the linear field-mod
+        # ladder this reader assumes -- iterOrderedSteps() there yields tree nodes
+        # whose getLevel()/MultiModsItem structure doesn't map to leveled hexagons,
+        # so feeding them in here would render a garbled FIELD_MODS bar. They are
+        # read separately by _read_skill_tree(); bail so FIELD_MODS never triggers.
+        if _is_skill_tree(veh):
             return steps, 0, 0
         cap = max_level(_safe_int(lambda: veh.level, 0))
         pp = veh.postProgression

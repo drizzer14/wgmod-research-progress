@@ -123,6 +123,54 @@ def test_elite_with_no_field_mods_is_complete():
     assert m.ticks == []
 
 
+# --- Tier-XI skill-tree (upgrade) mode ------------------------------------
+
+def _skill_snap(remaining=120000, done=3, total=12, vehicle_xp=40000,
+                free_xp=5000, **kw):
+    return t.VehicleSnapshot(
+        tier=10, is_elite=True, vehicle_xp=vehicle_xp, free_xp=free_xp,
+        is_skill_tree=True, skilltree_remaining_xp=remaining,
+        skilltree_done=done, skilltree_total=total, vehicle_class="heavyTank",
+        **kw)
+
+
+def test_skill_tree_mode_when_upgrade_remaining():
+    m = build_model(_skill_snap(remaining=120000, done=3, total=12))
+    assert m.mode == t.Mode.SKILL_TREE
+    assert m.scale_min == 0
+    assert m.scale_max == 120000             # axis = remaining upgrade XP
+    assert m.fill_vehicle == 40000           # two stacked segments
+    assert m.fill_free == 5000
+    assert m.ticks == []                     # aggregate readout, no per-node ticks
+    # node counter rides the existing field-mod counter fields
+    assert (m.fieldmods_done, m.fieldmods_total) == (3, 12)
+    assert m.vehicle_class == "heavyTank"
+
+
+def test_skill_tree_takes_priority_over_field_mods():
+    # Defensive: even if linear field-mod steps were somehow present, a skill-tree
+    # vehicle shows the upgrade readout (the adapter also zeroes the linear read).
+    m = build_model(_skill_snap(field_mod_steps=[_step(1, 2000)]))
+    assert m.mode == t.Mode.SKILL_TREE
+
+
+def test_tech_tree_still_wins_over_skill_tree():
+    # Unresearched modules must still show the tech tree first.
+    m = build_model(_skill_snap(tech_unlocks=[_u(1, 5000)]))
+    assert m.mode == t.Mode.TECH_TREE
+
+
+def test_fully_upgraded_skill_tree_with_prestige_is_elite():
+    m = build_model(_skill_snap(remaining=0, has_prestige=True, elite_level=12,
+                                elite_max_level=20, elite_grades=_grades()))
+    assert m.mode == t.Mode.ELITE
+
+
+def test_fully_upgraded_skill_tree_no_prestige_is_complete():
+    m = build_model(_skill_snap(remaining=0))
+    assert m.mode == t.Mode.COMPLETE
+
+
 # --- Elite Levels (prestige) modes ---------------------------------------
 
 def _grades():

@@ -21,6 +21,8 @@ it conflated this with Lesta's separate RU "Paragon" mechanic.
 class Mode(object):
     TECH_TREE = "tech_tree"     # not fully researched: modules + next vehicles
     FIELD_MODS = "field_mods"   # elite: remaining field-modification ("upgrade") steps
+    SKILL_TREE = "skill_tree"   # tier-XI upgrade: branching skill tree, shown as an
+                                # aggregate XP readout (remaining XP to fully upgrade)
     ELITE_REWARDS = "elite_rewards"  # tier XI w/ unearned milestone rewards: reward roadmap
     ELITE = "elite"             # elite + prestige: current grade-band progression
     COMPLETE = "complete"       # elite, no prestige data: "fully researched" badge
@@ -122,7 +124,9 @@ class VehicleSnapshot(object):
                  fieldmods_done=0, fieldmods_total=0, vehicle_class="",
                  has_prestige=False, elite_level=0, elite_max_level=0,
                  elite_current_xp=0, elite_next_xp=0,
-                 elite_grades=None, elite_rewards=None, elite_level_xp=None):
+                 elite_grades=None, elite_rewards=None, elite_level_xp=None,
+                 is_skill_tree=False, skilltree_remaining_xp=0,
+                 skilltree_done=0, skilltree_total=0):
         self.tier = tier                          # 1..11
         self.is_elite = is_elite                  # True = fully researched
         self.vehicle_xp = vehicle_xp              # unspent accumulated vehicle XP
@@ -147,6 +151,13 @@ class VehicleSnapshot(object):
         # {level -> cumulative combat XP required to REACH that level}. Used to
         # show each milestone's XP "cost" in its tooltip. Empty if unavailable.
         self.elite_level_xp = elite_level_xp or {}
+        # --- Tier-XI "vehicle skill tree" upgrade (branching post-progression). A
+        # skill-tree vehicle is shown as an aggregate XP readout, not per-node:
+        # the bar axis is the XP still needed to fully upgrade it. ---
+        self.is_skill_tree = is_skill_tree              # branching upgrade tree (id >= 10000)
+        self.skilltree_remaining_xp = skilltree_remaining_xp  # XP to fully upgrade (sum of unreceived node prices)
+        self.skilltree_done = skilltree_done            # researched nodes
+        self.skilltree_total = skilltree_total          # total priced nodes
 
 
 class ResearchProgressModel(object):

@@ -10,6 +10,9 @@ const observer = ModelObserver("WGModResearch");
 const CAT_ICON = {
     tech_tree: "img://gui/maps/icons/hangar/vehicleMenu/large/research.png",
     field_mods: "img://gui/maps/icons/hangar/vehicleMenu/large/fieldModification.png",
+    // Tier-XI skill-tree upgrade reuses the field-modification menu glyph (closest
+    // in-game section); swap if a dedicated post-progression icon is preferred.
+    skill_tree: "img://gui/maps/icons/hangar/vehicleMenu/large/fieldModification.png",
 };
 
 // Total spendable XP for this vehicle's research = the vehicle's accumulated
@@ -271,9 +274,15 @@ function render(model) {
         tipEl.style.display = "none";
         return;
     }
-    root.className = "";
+    // Tier-XI skill-tree mode: an aggregate XP readout (axis = XP to fully
+    // upgrade, fill = banked spendable XP), no per-node ticks. The model carries
+    // an empty ticks[], so the tick loop below renders nothing -- a clean single
+    // fill bar with the "VEHICLE UPGRADES N/M" node counter. wg-skill is a hook
+    // for any later fill-tone tuning (the default combat-XP tone is used now).
+    root.className = mode === "skill_tree" ? "wg-skill" : "";
 
-    label.textContent = mode === "field_mods" ? "Field Modifications" : "Research";
+    label.textContent = mode === "skill_tree" ? "Vehicle Upgrades"
+        : mode === "field_mods" ? "Field Modifications" : "Research";
     setCatIcon(catIcon, CAT_ICON[mode] || "");
 
     const vehW = pct(sMin + fv);

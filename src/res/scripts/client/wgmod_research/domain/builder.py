@@ -15,7 +15,7 @@ first, then global free XP. The view treats a scale_min == scale_max range as
 scale/ticks/fill axis with a single segment (fill_free = 0).
 """
 from wgmod_research.domain import types as t
-from wgmod_research.domain.resolvers import techtree, fieldmods, elite
+from wgmod_research.domain.resolvers import techtree, fieldmods, elite, skilltree
 
 
 def _max_pos(ticks, default):
@@ -43,6 +43,21 @@ def build_model(snapshot):
             mode=t.Mode.TECH_TREE, scale_min=0, scale_max=_max_pos(ticks, 0),
             fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=ticks,
             vehicle_class=veh_class)
+
+    # Tier-XI "vehicle skill tree" upgrade: a branching post-progression tree, so
+    # the linear FIELD_MODS reader doesn't apply (the adapter reads it as an
+    # aggregate instead). Show the remaining-XP-to-fully-upgrade readout. resolve()
+    # returns None once fully upgraded, so the bar then falls through to the
+    # prestige / COMPLETE branches like any other elite vehicle.
+    if snapshot.is_skill_tree:
+        st = skilltree.resolve(snapshot)
+        if st is not None:
+            return t.ResearchProgressModel(
+                mode=t.Mode.SKILL_TREE, scale_min=st["scale_min"],
+                scale_max=st["scale_max"], fill_vehicle=fill_vehicle,
+                fill_free=fill_free, ticks=[],
+                fieldmods_done=st["done"], fieldmods_total=st["total"],
+                vehicle_class=veh_class)
 
     # Nothing left to research: show remaining Field Modifications, plus the
     # researched/total field-mod-level counter in the header.
