@@ -1,8 +1,9 @@
 # Session Handoff — Research-Progress Bar (Phase 2, in-game working)
 
-_Updated 2026-06-29 (bar restyle session). Read tools/dev/README.md for the
-dev loop — note the hot-reload loop for JS/CSS-only changes (used throughout this
-session). NEXT SESSION FOCUS: real hover tooltips (name + XP)._
+_Updated 2026-06-29 (tooltips session). Read tools/dev/README.md for the dev
+loop — note the hot-reload loop for JS/CSS-only changes (used throughout). NEXT
+SESSION FOCUS: more small visual improvements (polish/position/sizing tuning) —
+all hot-reloadable JS/CSS; no specific blocker._
 
 ## TL;DR — where we are
 The mod **works in-game** on WoT **EU 2.3.0.1**. The Garage bar renders from live
@@ -18,21 +19,30 @@ now uses **real in-game icons**:
   total field-mod LEVELS, clamped to the tier cap.
 - **COMPLETE state** → class+elite badge (e.g. `mediumTank_elite.png`).
 
-Branch `main`, unpushed. Latest commit `9b1c6ac` (bar restyle) — and the docs
-commit carrying this handoff on top. Tests green (23, py3), 2.7-compiles clean.
+Branch `main`, unpushed. Tests green (23, py3), 2.7-compiles clean.
 
-**NEXT SESSION — TOOLTIPS (owner-set focus):**
-- Real hover **tooltips** on ticks (name + XP). Blocked by `pointer-events: none`
-  on `#wgmod-root`: DOM hover won't fire. Two routes (see the design-tokens doc's
-  "Native styling references"): (a) enable `pointer-events` on the ticks only —
-  watch for stealing clicks from the 3-D hangar; or (b) wire WoT's ViewModel-driven
-  tooltip manager. **This also fixes the empty field-mod tick names** — the
-  `step.action` label lookup in `engine_adapter._step_label` doesn't resolve yet
-  (see gotcha); tooltips need that name, so fix it as part of this.
-- The bar carries the data already: each tick has `name` + `xpRequired` in JS
-  (`mark.title` is set but Gameface doesn't render a native `title` tooltip).
+**DONE THIS SESSION — TOOLTIPS + field-mod names (both verified in-game):**
+- Real hover **tooltips** on ticks (name + XP), confirmed working. Implementation
+  (all in `WGModResearch.js`/`.css`): a transparent **`.wg-hot` overlay** is the
+  ONLY element with `pointer-events:auto` (root stays `none` so it never steals
+  hangar drag-to-rotate); it's sized to span the bar AND the glyph strip below,
+  so hovering an icon counts. A `mousemove` handler resolves the hovered tick
+  (exact element via an `e.target` climb, else nearest-by-`clientX`) and shows a
+  `.wg-tooltip` positioned BELOW the icons. See gotchas for the Gameface quirks.
+- **Empty field-mod names FIXED** (`engine_adapter._step_label`): the action name
+  is a *resource*, not an attribute — `action.getLocNameRes()` returns a wulf
+  `DynAccessor` you must CALL to get the int id, then `backport.text(id)`. The old
+  `action.locName`/`.name` reads didn't exist → empty.
+- **Field-mod tooltips list the two SELECTABLE VARIANTS** of each level's paired
+  choice ("A or B"), e.g. VII → *Anti-Reflective Optics Coating / External Vision
+  System*. See the field-mods section: each level = a leveled XP step (generic
+  base-mod name, repeats across levels) + a free `MultiModsItem` child holding the
+  two variants (`action.modifications[*].getLocNameRes()`); `_pair_options()` reads
+  them, keyed by the multi-mod's `getParentStepID()`. New plumbing: `Tick.options`
+  / `ProgressionStep.options` (domain) → `TickVM.options` (a `\n`-joined string) →
+  JS splits + renders.
 
-**STILL-OPEN SIDE ITEM (not tomorrow's focus):**
+**STILL-OPEN SIDE ITEM (not next focus):**
 - **Tier XI field-mod level cap is UNKNOWN and currently guessed.** `max_level()`
   in `domain/resolvers/fieldmods.py` maps tier≥10→8, so tier **XI also gets 8**,
   which is unverified. Owner has no non-fully-upgraded tier-XI tank to read it live;
@@ -119,11 +129,12 @@ docs/superpowers/research/decompiled-findings.md   # verified EU symbols
    - DONE: **field-mod level tier cap** + **researched/total counter**.
    - Owner DROPPED the "stable full-scale / completed-base bar" idea; keep the
      remaining-only view. Don't revisit unless re-raised.
-   - STILL TODO: real hover **tooltips** (name + XP) — blocked by `pointer-events:
-     none` on the root; either enable pointer events on ticks (watch for stealing
-     clicks from the 3-D hangar) or wire WoT's ViewModel tooltip manager. Also
-     fixes the empty field-mod tick names (see gotcha). Final **position/size**
-     tuning against the live hangar (current: `top: 190rem`).
+   - DONE: real hover **tooltips** (name + XP + field-mod pair variants), via the
+     `.wg-hot` overlay + `mousemove` (see TL;DR + gotchas). Empty field-mod names
+     also fixed.
+   - STILL TODO: general visual polish — **position/size** tuning against the live
+     hangar (current: `top: 190rem`), tooltip styling/offsets, and whatever small
+     improvements the owner raises next session. All hot-reloadable JS/CSS.
 3. **Finalize packaging & docs** (Task): remove the loose `res_mods` gameface
    overlay before a clean ship verification (it shadows the packaged assets — see
    gotcha); `meta.xml` name/id (consider
@@ -159,6 +170,16 @@ Data flow: `engine_adapter` reads icon URLs + field-mod levels → domain `Tick`
   The tree always lists **8 levels + 5 multi-mods regardless of tier**; only the
   per-level XP scales (T6 3500 / T8 11500 / T10 28000). Clamp to the tier cap:
   `max_level(tier)` (VI–VII=5, VIII=6, IX=7, X+=8 — **XI unverified**).
+- **Per-level pair structure (verified in-game, drives the tooltip variants):** a
+  level's leveled XP step and its free `MultiModsItem` are SEPARATE steps — the
+  multi-mod hangs off the leveled step as a child (`MultiModsItem.getParentStepID()`
+  == the leveled step's `stepID`). The leveled step's own name is a generic base
+  mod that REPEATS across levels (e.g. "Additional Armor Plating (Type 2)" at both
+  L7 and L8 — confirmed it's exactly what WoT's own field-mods grid shows). The two
+  *distinct* selectable variants live in the multi-mod's `action.modifications`
+  (always 2), each named via `mod.getLocNameRes()`. `_pair_options()` reads them
+  and `_read_post_progression` keys them by parent stepID onto the leveled tick's
+  `options` → tooltip "A or B".
 - **Counter** = researched / total LEVELED field mods within the cap (`fieldmods_done
   / fieldmods_total`); multi-mods are not counted.
 
@@ -209,8 +230,23 @@ Data flow: `engine_adapter` reads icon URLs + field-mod levels → domain `Tick`
   re-add themselves on each hangar load; so must we. `install_vehicle_listener()` is
   self-healing (re-adds iff not in the list) and is called from the patched
   `_onLoading` on every mount. Don't go back to a once-only subscription.
-- **Field-mod tick names are empty** — the `step.action` label lookup in
-  `engine_adapter._step_label` doesn't resolve; fix when wiring tooltips.
+- **Gameface hover/tooltip quirks (learned this session):** (1) Gameface only
+  hit-tests within an element's OWN box — children painted OUTSIDE it (our glyphs
+  hang below the bar) are NOT hovered via the parent, so a hover region must be a
+  box that actually covers them (the `.wg-hot` overlay). (2) `mouseenter` on tiny
+  marks is unreliable; `mousemove` on a covering region works. (3) `e.offsetX` is
+  NOT populated (came back `undefined`) — use `clientX - getBoundingClientRect().left`.
+  (4) `e.target` is usually the listener's element / the layer, NOT the deep glyph,
+  so per-element hit detection can't be relied on — resolve the tick by nearest
+  `clientX` (keep an `e.target` climb as a bonus). (5) `render()` runs on every
+  model update (can fire while the cursor is still) — do NOT hide the tooltip in
+  `render()` or it blinks out whenever the cursor stops; let the hover handler own
+  visibility. (6) No native `title` tooltip — must build our own DOM element.
+- **Field-mod action NAME is a resource, not an attribute (FIXED):** use
+  `action.getLocNameRes()` → it's a wulf `DynAccessor`, CALL it for the int id →
+  `backport.text(id)`. `getLocName()` alone is just the raw key
+  (`clutches_replace_1`); `action.locName`/`.name` don't exist. Same call resolves
+  each variant in `action.modifications` for the pair tooltip.
 - **Special "7×7" tanks** (T57 Heavy 7×7, etc.) use a hangar without
   `HangarVehicleParamsPresenter`, so the bar won't mount there. If that matters,
   pick a more universally-present sub-view as the inject host (or accept the gap).

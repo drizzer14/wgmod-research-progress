@@ -131,7 +131,26 @@ def _read_post_progression(veh):
             return steps, 0, 0
         cap = max_level(_safe_int(lambda: veh.level, 0))
         pp = veh.postProgression
-        for step in pp.iterOrderedSteps():
+        # Each level pairs a leveled step (the XP-paid base mod) with a free
+        # MultiModsItem holding two SELECTABLE VARIANTS, attached as that step's
+        # child (parent = the leveled step's id). Collect those variant pairs
+        # first, keyed by parent step id, so we can hang them on the leveled
+        # tick's tooltip. (The leveled step's own name is a generic base mod and
+        # repeats across levels; the pair is what distinguishes a level.)
+        all_steps = list(pp.iterOrderedSteps())
+        pairs_by_parent = {}
+        for step in all_steps:
+            try:
+                if type(step.action).__name__ != "MultiModsItem":
+                    continue
+                parent = _safe(lambda: step.getParentStepID(), None)
+                if parent is None:
+                    continue
+                pairs_by_parent[parent] = _pair_options(step.action)
+            except Exception:
+                LOG_CURRENT_EXCEPTION()
+                continue
+        for step in all_steps:
             try:
                 level = int(_safe(lambda: step.getLevel(), 0))
                 if level and level > cap:
@@ -153,7 +172,8 @@ def _read_post_progression(veh):
                 steps.append(t.ProgressionStep(
                     step_id=step.stepID, name=name, icon=icon,
                     xp_cost=xp_cost, unlocked=received,
-                    level=level))
+                    level=level,
+                    options=pairs_by_parent.get(step.stepID, [])))
             except Exception:
                 LOG_CURRENT_EXCEPTION()
                 continue
@@ -163,15 +183,62 @@ def _read_post_progression(veh):
         return steps, fm_done, fm_total
 
 
+def _pair_options(action):
+    """The selectable variant names of a MultiModsItem's pair, e.g.
+    ["Anti-Reflective Optics Coating", "External Vision System"]. Each entry in
+    action.modifications resolves its display name the same way a step action
+    does (getLocNameRes() -> DynAccessor -> backport.text). Best-effort; returns
+    [] on any failure."""
+    out = []
+    try:
+        from gui.impl import backport
+        for mod in (getattr(action, "modifications", None) or []):
+            try:
+                acc = mod.getLocNameRes()
+                res_id = acc() if callable(acc) else acc
+                name = backport.text(res_id) or ""
+                if name:
+                    out.append(name)
+            except Exception:
+                LOG_CURRENT_EXCEPTION()
+                continue
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+    return out
+
+
 def _step_label(step):
-    """Best-effort name/icon for a field-mod step via its action model.
-    Falls back to the step id; refined during in-game verification."""
+    """Display name + icon for a field-mod step via its action model.
+
+    The name is a *resource*, not a plain attribute (verified live, EU 2.3):
+    `action.getLocNameRes()` returns a wulf `DynAccessor` which must be CALLED to
+    yield the int resource id, which `backport.text()` then resolves to the
+    localized string (e.g. "Friction Couplers Replacement (Type 1)").
+    `getLocName()` alone is only the raw loc KEY ("clutches_replace_1") -- the
+    earlier `action.locName`/`.name` attribute reads didn't exist, so names came
+    back empty. Falls back to the raw key, then the step id."""
+    name, icon = "", ""
     try:
         action = getattr(step, "action", None)
-        if action is not None:
-            name = getattr(action, "locName", None) or getattr(action, "name", "") or ""
-            icon = getattr(action, "imgName", "") or ""
+        if action is None:
+            return ("step %s" % getattr(step, "stepID", "?")), ""
+        try:
+            icon = action.getImageName() or ""
+        except Exception:
+            icon = ""
+        try:
+            from gui.impl import backport
+            acc = action.getLocNameRes()
+            res_id = acc() if callable(acc) else acc
+            name = backport.text(res_id) or ""
+        except Exception:
+            # resource lookup failed -> fall back to the raw loc key.
+            try:
+                name = action.getLocName() or ""
+            except Exception:
+                name = ""
+        if name:
             return name, icon
     except Exception:
         LOG_CURRENT_EXCEPTION()
-    return ("step %s" % getattr(step, "stepID", "?")), ""
+    return ("step %s" % getattr(step, "stepID", "?")), icon

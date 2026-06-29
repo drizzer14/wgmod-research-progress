@@ -87,6 +87,23 @@
         0 3rem 8rem rgba(0, 0, 0, 0.75);              /* lift off the hangar */
 }
 
+/* Transparent hover overlay: the ONLY element we re-enable pointer-events on
+   (root stays pointer-events:none so it never steals hangar drag-to-rotate).
+   Spans the bar AND the glyph strip hanging below it (top -3rem to ~52rem below
+   the track), so hovering either a tick or its icon drives the tooltip. It's a
+   separate box (not the ticks layer) because the glyphs are positioned at
+   top:100% of each tick, so growing the ticks layer would push the icons down. */
+#wgmod-root .wg-hot {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -3rem;
+    bottom: -39rem;
+    z-index: 3;                 /* topmost, so it reliably receives the hover */
+    pointer-events: auto;
+    background: transparent;
+}
+
 /* Inner border + dense segment notches, light-gray (#888) BLENDED with color-burn so
    each one burns into whatever color is under it -- an intense, saturated darken
    that takes on the underlying hue (a deep saturated tan over the free-XP fill,
@@ -245,4 +262,70 @@
     font-size: 9rem;
     font-weight: 700;
     color: #1a1a1a;
+}
+
+/* Hover tooltip (name + XP), shown above the track at the hovered tick's x.
+   Lives inside .wg-track (position:relative); JS sets `left` to the tick's
+   percent and toggles display. Dark translucent panel + parchment text, the
+   native tooltip look. pointer-events:none so it never eats hover itself
+   (which would flicker as the cursor crosses from tick to tooltip). */
+#wgmod-root .wg-tooltip {
+    position: absolute;
+    top: 100%;
+    margin-top: 36rem;          /* float clear BELOW the track + its icon glyphs */
+    transform: translateX(-50%);
+    display: none;
+    z-index: 4;                 /* above the hover overlay */
+    pointer-events: none;
+    white-space: nowrap;
+    padding: 5rem 8rem;
+    background: rgba(0, 0, 0, 0.9);
+    border: 1rem solid rgba(255, 255, 190, 0.25);
+    box-shadow: 0 3rem 8rem rgba(0, 0, 0, 0.8);
+    text-align: center;
+}
+#wgmod-root .wg-tip-name {
+    font-size: 12rem;
+    font-weight: 700;
+    color: #ede6d9;
+    text-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.9);
+}
+/* The two selectable variants of the level's paired modification ("pick one").
+   Each is a separate line; an "or" cue sits between them via the :not(:last)
+   separator so the choice reads clearly. */
+#wgmod-root .wg-tip-opts {
+    margin-top: 4rem;
+    padding-top: 3rem;
+    border-top: 1rem solid rgba(255, 255, 190, 0.18);
+}
+#wgmod-root .wg-tip-opt {
+    font-size: 11rem;
+    font-weight: 400;
+    color: #d8d2c6;
+    padding: 1rem 0;
+}
+#wgmod-root .wg-tip-opt:not(:last-child)::after {
+    content: "or";
+    display: block;
+    font-size: 9rem;
+    font-weight: 700;
+    letter-spacing: 0.5rem;
+    text-transform: uppercase;
+    color: #8e867d;
+    margin: 1rem 0;
+}
+
+#wgmod-root .wg-tip-xp {
+    margin-top: 4rem;
+    font-size: 11rem;
+    font-weight: 700;
+    color: #ecca9d;             /* currency tan, like the XP figures */
+}
+#wgmod-root .wg-tip-status {
+    margin-top: 2rem;
+    font-size: 10rem;
+    font-weight: 700;
+    letter-spacing: 0.5rem;
+    text-transform: uppercase;
+    color: #8e867d;             /* dim, matches the locked-tick gray */
 }

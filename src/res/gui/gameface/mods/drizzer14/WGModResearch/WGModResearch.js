@@ -27,6 +27,50 @@ function romanize(n) {
     return n > 0 ? String(n) : "";
 }
 
+// XP with space thousand-separators, matching WoT's number formatting.
+function fmtXp(n) {
+    n = n | 0;
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+function escapeHtml(s) {
+    return String(s)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Display name for a tick. Field-mod names may be empty (the engine label
+// lookup can miss); fall back to "Field Modification <level>".
+function tickName(t) {
+    if (t.name) return t.name;
+    if (t.category === "fieldmod") {
+        const r = romanize(t.level);
+        return r ? "Field Modification " + r : "Field Modification";
+    }
+    return "";
+}
+
+// Tooltip body for a tick: the base mod name, then (for field-mod levels with a
+// paired choice) the two selectable variants, then the XP cost. A status line
+// is appended when the tick is locked.
+function tooltipHtml(t) {
+    const name = tickName(t);
+    let html = "";
+    if (name) html += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
+    const opts = (t.options || "").split("\n").filter(function (s) { return s; });
+    if (opts.length) {
+        html += '<div class="wg-tip-opts">';
+        for (let i = 0; i < opts.length; i++) {
+            html += '<div class="wg-tip-opt">' + escapeHtml(opts[i]) + "</div>";
+        }
+        html += "</div>";
+    }
+    html += '<div class="wg-tip-xp">' + fmtXp(t.xpRequired || 0) + " XP</div>";
+    if (t.locked) {
+        html += '<div class="wg-tip-status">Prerequisites not met</div>';
+    }
+    return html;
+}
+
 function setCatIcon(el, url) {
     if (url) {
         el.style.backgroundImage = "url('" + url + "')";
@@ -67,6 +111,8 @@ function ensureRoot() {
             '<div class="wg-fill wg-fill-veh"></div>' +
             '<div class="wg-fill wg-fill-free"></div>' +
             '<div class="wg-ticks"></div>' +
+            '<div class="wg-hot"></div>' +
+            '<div class="wg-tooltip"></div>' +
             "</div>";
         document.body.appendChild(root);
     }
@@ -110,6 +156,18 @@ function render(model) {
     const vehEl = root.querySelector(".wg-fill-veh");
     const freeEl = root.querySelector(".wg-fill-free");
     const ticksEl = root.querySelector(".wg-ticks");
+    const tipEl = root.querySelector(".wg-tooltip");
+    const hotEl = root.querySelector(".wg-hot");
+    // Hover lives on a dedicated transparent overlay (.wg-hot), the only element
+    // we re-enable pointer-events on (root stays pointer-events:none so it never
+    // steals hangar drag-to-rotate). It's sized in CSS to span the bar AND the
+    // glyphs below it, so hovering an icon registers too.
+    ensureHover(hotEl, tipEl);
+    // NB: do NOT hide the tooltip here. render() runs on every model update
+    // (which can fire while the cursor sits still over the bar); force-hiding it
+    // each render made the tip vanish whenever the cursor stopped moving. The
+    // hover handler owns visibility -- it re-reads the (rebuilt) tick metadata
+    // below, so an in-place refresh just updates the data under the cursor.
 
     if (mode === "complete" || sMax <= sMin) {
         root.className = "wg-complete";
@@ -118,7 +176,9 @@ function render(model) {
         vehEl.style.left = "0%";
         vehEl.style.width = "100%";
         freeEl.style.width = "0%";
-        ticksEl.innerHTML = "";
+        ticksEl.innerHTML = "";   // no ticks -> nothing to hover
+        hotEl._wgTickMeta = [];
+        tipEl.style.display = "none";
         return;
     }
     root.className = "";
@@ -136,6 +196,8 @@ function render(model) {
     ticksEl.innerHTML = "";
     const ticks = data.ticks;
     const n = arrLen(ticks);
+    // {left%, body} per tick, for the nearest-by-x hover fallback.
+    const tickMeta = [];
     for (let i = 0; i < n; i++) {
         const t = unwrap(ticks[i] !== undefined ? ticks[i] : ticks.get && ticks.get(i));
         if (!t) continue;
@@ -143,8 +205,15 @@ function render(model) {
         mark.className =
             "wg-tick wg-cat-" + (t.category || "x") +
             (t.locked ? " wg-locked" : t.affordable ? " wg-aff" : "");
-        mark.style.left = pct(t.position) + "%";
-        mark.title = (t.name || "") + " — " + (t.xpRequired || 0) + " XP";
+        const leftPct = pct(t.position);
+        mark.style.left = leftPct + "%";
+        const body = tooltipHtml(t);
+        // Tag the tick (and, via ancestry, its glyph) so the handler can read
+        // the exact tick under the cursor when Gameface deep-targets; also keep
+        // a flat list for the nearest-by-x fallback when it doesn't.
+        mark._wgBody = body;
+        mark._wgLeft = leftPct;
+        tickMeta.push({ left: leftPct, body: body });
 
         if (t.category === "fieldmod") {
             // Field-mod ticks: a hexagon glyph with the level roman numeral
@@ -168,6 +237,48 @@ function render(model) {
         }
         ticksEl.appendChild(mark);
     }
+    hotEl._wgTickMeta = tickMeta;
+}
+
+// Attach the hover handler to the ticks layer exactly once. That layer is the
+// only element we re-enable pointer-events on (the root stays
+// pointer-events:none so it never steals hangar drag-to-rotate) and is extended
+// in CSS to span the bar AND the glyphs below it. Resolve the hovered tick two
+// ways: (1) the exact element under the cursor (works when hovering a glyph,
+// whose ancestor .wg-tick carries the body); (2) otherwise the nearest tick by
+// cursor x (when hovering bare bar, where e.target is the layer itself).
+function ensureHover(hotEl, tipEl) {
+    if (hotEl._wgHoverBound) return;
+    hotEl._wgHoverBound = true;
+    const show = (body, leftPct) => {
+        tipEl.innerHTML = body;
+        tipEl.style.left = leftPct + "%";
+        tipEl.style.display = "block";
+    };
+    hotEl.addEventListener("mousemove", function (e) {
+        // (1) exact element under the cursor.
+        let node = e.target;
+        while (node && node !== hotEl) {
+            if (node._wgBody !== undefined) { show(node._wgBody, node._wgLeft); return; }
+            node = node.parentElement;
+        }
+        // (2) nearest tick by cursor x.
+        const meta = hotEl._wgTickMeta;
+        if (!meta || !meta.length) { tipEl.style.display = "none"; return; }
+        const rect = hotEl.getBoundingClientRect();
+        const w = (rect && rect.width) || hotEl.clientWidth || 1;
+        const left = rect ? rect.left : 0;
+        const curPct = ((e.clientX - left) / w) * 100;
+        let best = null, bestD = 1e9;
+        for (let i = 0; i < meta.length; i++) {
+            const d = Math.abs(meta[i].left - curPct);
+            if (d < bestD) { bestD = d; best = meta[i]; }
+        }
+        if (best) show(best.body, best.left); else tipEl.style.display = "none";
+    });
+    hotEl.addEventListener("mouseleave", function () {
+        tipEl.style.display = "none";
+    });
 }
 
 engine.whenReady.then(() => {

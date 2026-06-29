@@ -40,5 +40,5 @@ def resolve(snapshot, start_position=0):
             xp_position=running, category="fieldmod", icon=step.icon, name=step.name,
             xp_gained=0, xp_required=step.xp_cost,
             affordable=(running <= spendable), completed=False,
-            level=step.level))
+            level=step.level, options=step.options))
     return ticks

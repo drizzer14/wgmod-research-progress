@@ -19,7 +19,7 @@ class Mode(object):
 class Tick(object):
     def __init__(self, xp_position, category, icon, name,
                  xp_gained, xp_required, affordable, completed, locked=False,
-                 level=0):
+                 level=0, options=None):
         self.xp_position = xp_position
         # vehicle | module (tech-tree unlock kind) | fieldmod. Drives the
         # per-tick glyph in the view (a bar is all-tech-tree or all-field-mods,
@@ -37,6 +37,11 @@ class Tick(object):
         # Field-modification level (1..N) -> the roman numeral shown in the
         # hexagon glyph. 0 for non-field-mod ticks.
         self.level = level
+        # The two selectable variants of this level's paired modification
+        # (MultiModsItem), e.g. ["Anti-Reflective Optics Coating", "External
+        # Vision System"] -> listed in the hover tooltip. Empty for levels with
+        # no pair choice (features, role slots) and for tech-tree ticks.
+        self.options = options or []
 
 
 class UnlockItem(object):
@@ -53,13 +58,16 @@ class UnlockItem(object):
 
 class ProgressionStep(object):
     """A field-modification step (post-progression tree node, paid with XP)."""
-    def __init__(self, step_id, name, icon, xp_cost, unlocked, level=0):
+    def __init__(self, step_id, name, icon, xp_cost, unlocked, level=0,
+                 options=None):
         self.step_id = step_id
         self.name = name
         self.icon = icon
         self.xp_cost = xp_cost
         self.unlocked = unlocked          # already received/earned
         self.level = level                # field-mod level (1..N) -> roman numeral
+        # variant names of the paired choice (MultiModsItem) at this level.
+        self.options = options or []
 
 
 class VehicleSnapshot(object):
