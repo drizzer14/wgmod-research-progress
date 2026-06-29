@@ -12,6 +12,15 @@ const CAT_ICON = {
     field_mods: "img://gui/maps/icons/hangar/vehicleMenu/large/fieldModification.png",
 };
 
+// Total spendable XP for this vehicle's research = the vehicle's accumulated
+// combat XP + the account-global free XP -- exactly how the in-game research
+// screen totals it (techtree getVehTotalXP = freeXP + vehXP). Uses that screen's
+// own "Total XP" row glyph (vehicle_hub/research_purchase/total_experience). The
+// game also ships an `_elite` variant, but its art is drawn smaller + offset low
+// in the same 16x16 canvas (no higher-res source), so it reads as lower quality;
+// we use the clean base glyph in every mode instead.
+const XP_ICON = "img://gui/maps/icons/vehicle_hub/research_purchase/total_experience.png";
+
 // Elite badge for the COMPLETE state: the in-game class+elite icon. veh class
 // ids use '-' (AT-SPG); the icon files use '_' (AT_SPG_elite.png).
 function eliteIcon(vehClass) {
@@ -27,10 +36,11 @@ function romanize(n) {
     return n > 0 ? String(n) : "";
 }
 
-// XP with space thousand-separators, matching WoT's number formatting.
-function fmtXp(n) {
+// XP with thousand-separators. Defaults to WoT's native space separator (used in
+// the tooltip); the header Total-XP counter passes "," for comma grouping.
+function fmtXp(n, sep) {
     n = n | 0;
-    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+    return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, sep || " ");
 }
 
 function escapeHtml(s) {
@@ -56,6 +66,10 @@ function tooltipHtml(t) {
     const name = tickName(t);
     let html = "";
     if (name) html += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
+    // XP sits directly under the title.
+    html += '<div class="wg-tip-xp">' + fmtXp(t.xpRequired || 0) + " XP</div>";
+    // The field-mod variant names ("description") + the divider above them show
+    // only when the level actually has a paired choice -- below the title + XP.
     const opts = (t.options || "").split("\n").filter(function (s) { return s; });
     if (opts.length) {
         html += '<div class="wg-tip-opts">';
@@ -64,7 +78,6 @@ function tooltipHtml(t) {
         }
         html += "</div>";
     }
-    html += '<div class="wg-tip-xp">' + fmtXp(t.xpRequired || 0) + " XP</div>";
     if (t.locked) {
         html += '<div class="wg-tip-status">Prerequisites not met</div>';
     }
@@ -91,6 +104,16 @@ function setUpgrades(el, done, total) {
     }
 }
 
+// Right-side readout of the TOTAL spendable XP (vehicle combat XP + global free
+// XP), with the native experience glyph to the right of the figure. Shown in
+// every mode -- available XP stays meaningful even once the tank is researched.
+function setXp(root, vehXp, freeXp) {
+    root.querySelector(".wg-xp-ico").style.backgroundImage =
+        "url('" + XP_ICON + "')";
+    root.querySelector(".wg-xp-val").textContent =
+        fmtXp((vehXp || 0) + (freeXp || 0), ",");
+}
+
 // wulf exposes nested viewmodels / array elements wrapped as { value: ... }.
 function unwrap(x) {
     return x && x.value !== undefined ? x.value : x;
@@ -104,8 +127,14 @@ function ensureRoot() {
         root.innerHTML =
             '<div class="wg-head">' +
             '<div class="wg-cat-icon"></div>' +
+            '<div class="wg-head-left">' +
             '<div class="wg-label"></div>' +
             '<div class="wg-upgrades"></div>' +
+            "</div>" +
+            '<div class="wg-xp">' +
+            '<span class="wg-xp-val"></span>' +
+            '<span class="wg-xp-ico"></span>' +
+            "</div>" +
             "</div>" +
             '<div class="wg-track">' +
             '<div class="wg-fill wg-fill-veh"></div>' +
@@ -133,17 +162,24 @@ function render(model) {
     const upgradesEl = root.querySelector(".wg-upgrades");
     const data = unwrap(model && model.wgResearch);
 
+    const xpEl = root.querySelector(".wg-xp");
+
     if (!data) {
         const keys = model ? Object.keys(model).join(",") : "no-model";
         label.textContent = "WGMOD: waiting for data | keys=" + keys;
         setCatIcon(catIcon, "");
         setUpgrades(upgradesEl, 0, 0);
+        xpEl.style.display = "none";
         return;
     }
 
     // Field-mod progress counter (researched / total levels within the tier
     // cap) -- shown whenever the vehicle has field mods, regardless of mode.
     setUpgrades(upgradesEl, data.fieldModsDone || 0, data.fieldModsTotal || 0);
+    // Spendable XP readout (combat XP on this vehicle + global free XP). Shown in
+    // every mode -- placed before the mode branching so COMPLETE shows it too.
+    xpEl.style.display = "flex";
+    setXp(root, data.fillVehicle, data.fillFree);
 
     const mode = data.mode;
     const sMin = data.scaleMin || 0;

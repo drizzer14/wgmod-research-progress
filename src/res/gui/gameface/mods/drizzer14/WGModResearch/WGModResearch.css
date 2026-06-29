@@ -20,7 +20,17 @@
     position: relative;
     display: flex;
     align-items: center;
+    justify-content: space-between;   /* title group left, XP group right */
     margin-bottom: 5rem;
+}
+
+/* Left group: the category title + the field-mod counter. Pushed right so the
+   label clears the inner half of the category icon now centered on the bar's
+   left edge (icon is 36rem -> ~18rem overhang + a small gap). */
+#wgmod-root .wg-head-left {
+    display: flex;
+    align-items: center;
+    margin-left: 14rem;
 }
 
 /* category icon (Research / Field Modifications) -- the in-game Vehicle-
@@ -28,11 +38,12 @@
    bar so the label text lines up with the track's left edge. */
 #wgmod-root .wg-cat-icon {
     position: absolute;
-    left: -35rem;
+    left: 0;                    /* horizontal center sits on the bar's LEFT edge */
     top: 50%;
-    transform: translateY(-50%);
-    width: 34rem;
-    height: 34rem;
+    margin-top: -1rem;          /* optical nudge up 1px (elite resets this below) */
+    transform: translate(-50%, -50%);
+    width: 36rem;               /* base categories (+2 over the old 34) */
+    height: 36rem;
     background-repeat: no-repeat;
     background-position: center;
     background-size: contain;
@@ -43,8 +54,12 @@
 }
 
 /* COMPLETE state shows the elite badge here, which already has a shadow baked
-   into the asset -- don't double it up. */
+   into the asset -- don't double it up. Its art carries more internal padding,
+   so shrink it a bit to better match the other category icons' proportions. */
 #wgmod-root.wg-complete .wg-cat-icon {
+    width: 30rem;
+    height: 30rem;
+    margin-top: 0;              /* elite badge is NOT nudged up */
     filter: none;
 }
 
@@ -68,6 +83,38 @@
     letter-spacing: 1rem;
     color: #ecca9d;
     text-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.8);
+}
+
+/* Total-XP readout, pinned to the RIGHT end of the header row (the head uses
+   space-between). One figure -- vehicle combat XP + global free XP -- in the
+   experience tone, with the native experience glyph to its RIGHT. */
+#wgmod-root .wg-xp {
+    position: absolute;
+    right: -7rem;               /* icon centers on the bar's RIGHT edge (8rem half-icon
+                                   minus the 1rem trailing letter-spacing on the value) */
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+}
+#wgmod-root .wg-xp-val {
+    font-size: 13rem;
+    font-weight: 700;
+    letter-spacing: 1rem;      /* match the label + upgrades counter rhythm */
+    color: #dce0e0;             /* experience tone, pairs with the XP glyph */
+    text-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.85);
+}
+/* currency glyph -- a div-style background (Gameface clips <img>); the source is
+   24x24, contain-scaled into a 16rem box. Sits to the RIGHT of the figure. */
+#wgmod-root .wg-xp-ico {
+    display: inline-block;
+    width: 16rem;
+    height: 16rem;
+    margin-left: 4rem;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    filter: drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.8));
 }
 
 /* Track: flat dark channel with a TWO-TONE frame -- a dark outer border, then a
@@ -182,31 +229,39 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    width: 2rem;
-    margin-left: -1rem;
+    width: 1rem;
+    margin-left: -0.5rem;
     background: #b2afab;
     opacity: 0.7;
     box-shadow: 0 0 1rem #888888;          /* keep edges defined */
 }
 
-/* affordable (and unlocked): bright primary, thicker -- stands out against the
-   green vehicle-XP fill it sits on. */
+/* affordable (and unlocked): bright primary, slightly thicker -- stands out
+   against the vehicle-XP fill it sits on. */
 #wgmod-root .wg-tick.wg-aff {
-    width: 3rem;
-    margin-left: -1.5rem;
+    width: 2rem;
+    margin-left: -1rem;
     background: #ede6d9;
     opacity: 1;
     box-shadow: 0 0 4rem rgba(255, 255, 255, 0.7);
 }
 
-/* locked (prerequisites not met): dim tertiary gray -- reads as unavailable
-   even when affordable. Overrides the affordable style. */
+/* locked (prerequisites not met): a cool desaturated gray -- reads as
+   unavailable, but kept clearly VISIBLE (the old 0.45 opacity made it nearly
+   disappear over the dark empty channel). Overrides the affordable style. */
 #wgmod-root .wg-tick.wg-locked {
-    width: 2rem;
-    margin-left: -1rem;
-    background: #8e867d;
-    opacity: 0.45;
-    box-shadow: 0 0 1rem #888888;
+    width: 1.5rem;
+    margin-left: -0.75rem;
+    background: #a89f94;
+    opacity: 0.9;
+    box-shadow: 0 0 2rem rgba(0, 0, 0, 0.8);   /* dark halo so it reads on light fill too */
+}
+
+/* the locked tick's glyph: keep it visible but visibly "not yet" -- a partial
+   desaturate (chained before the drop-shadow so the shadow is preserved). */
+#wgmod-root .wg-tick.wg-locked .wg-tick-img {
+    filter: grayscale(0.7) brightness(0.85)
+            drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
 }
 
 /* Category icon (real in-game art) hangs centered below each tick. Rendered via
@@ -240,6 +295,12 @@
 /* field-mod ticks: a hexagon glyph (clip-path) holding the level roman numeral,
    hung below the tick like the icons. Tan fill mirrors the in-game field-mod
    level badges; the parent tick's opacity dims not-yet-affordable levels. */
+/* Field-mod level badge -- matches the in-game field-modifications menu: a DARK
+   hexagon with a thin LIGHT-tan border ring and a light roman numeral. Gameface
+   `border` ignores clip-path, so the ring is built by layering two clipped
+   hexagons: this element is the light border color; the ::before is the dark
+   fill, uniformly shrunk via transform:scale so a constant-thickness ring shows
+   around it. */
 #wgmod-root .wg-tick-hex {
     position: absolute;
     left: 50%;
@@ -248,7 +309,7 @@
     transform: translateX(-50%);
     width: 18rem;
     height: 20rem;
-    background: #ecca9d;        /* flat currency tan, matching the fill */
+    background: #d8c39a;        /* light tan -- shows only as the border ring */
     clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
     display: flex;
     align-items: center;
@@ -257,11 +318,25 @@
        clip-path); lifts the badge off the bar. */
     filter: drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
 }
+#wgmod-root .wg-tick-hex::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #15181a;        /* dark fill, like the menu badges */
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    transform: scale(0.9);      /* uniform shrink -> even, THIN border ring */
+    transform-origin: center;
+}
 #wgmod-root .wg-tick-hex span {
+    position: relative;         /* sit above the ::before dark fill */
+    z-index: 1;
     font-family: "PFDINMax", sans-serif;
     font-size: 9rem;
     font-weight: 700;
-    color: #1a1a1a;
+    color: #ecca9d;             /* tan numeral on the dark fill */
 }
 
 /* Hover tooltip (name + XP), shown above the track at the hovered tick's x.
@@ -269,6 +344,16 @@
    percent and toggles display. Dark translucent panel + parchment text, the
    native tooltip look. pointer-events:none so it never eats hover itself
    (which would flicker as the cursor crosses from tick to tooltip). */
+/* Built to read like the client's own garage tooltips (the legacy "blocks"
+   shell/module tooltips render in this same container): the panel is the native
+   9-slice frame `gui/maps/icons/tooltip/background_with_border.png` (border-image,
+   the way the client's `.Index_decorator` draws it -- the bg + border are baked
+   into the atlas, not CSS hex), with the native deep box-shadow. A solid dark
+   `background` stays behind as a fallback in case the atlas URL ever fails to
+   resolve (the border-image's `fill` region covers it when it loads).
+   Typography + colors use the native design tokens (PFDINMax; primary #ede6d9
+   title, tertiary #8e867d body, currency tan for XP). Left-aligned + wrapping,
+   like the native cards. */
 #wgmod-root .wg-tooltip {
     position: absolute;
     top: 100%;
@@ -277,53 +362,71 @@
     display: none;
     z-index: 4;                 /* above the hover overlay */
     pointer-events: none;
-    white-space: nowrap;
-    padding: 5rem 8rem;
-    background: rgba(0, 0, 0, 0.9);
-    border: 1rem solid rgba(255, 255, 190, 0.25);
-    box-shadow: 0 3rem 8rem rgba(0, 0, 0, 0.8);
-    text-align: center;
+    box-sizing: border-box;
+    max-width: 300rem;
+    white-space: normal;
+    padding: 12rem 16rem 14rem;
+    text-align: left;
+    background: rgba(20, 20, 20, 0.95);            /* fallback under the atlas */
+    border-style: solid;
+    border-width: 4rem;
+    border-color: transparent;
+    border-image-source: url('img://gui/maps/icons/tooltip/background_with_border.png');
+    border-image-slice: 4 fill;
+    border-image-width: 4rem;
+    border-image-repeat: round;
+    box-shadow: 0 0 32rem rgba(15, 15, 15, 0.8);   /* native tooltip shadow */
 }
+/* Title -- native `.Index_title` token (primary parchment, semibold). */
 #wgmod-root .wg-tip-name {
-    font-size: 12rem;
-    font-weight: 700;
+    font-size: 17rem;
+    font-weight: 600;
     color: #ede6d9;
-    text-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.9);
+    opacity: 0.95;
+    line-height: 1.1;
 }
-/* The two selectable variants of the level's paired modification ("pick one").
-   Each is a separate line; an "or" cue sits between them via the :not(:last)
-   separator so the choice reads clearly. */
+/* The two selectable variants of the level's paired modification ("pick one") --
+   the level's "description". Shown only when present (field-mod pair levels),
+   below the title + XP, and led by the native tooltip divider graphic so the
+   panel reads title / XP / rule / description, like the client's tooltips. Body
+   uses the native tertiary token. */
 #wgmod-root .wg-tip-opts {
-    margin-top: 4rem;
-    padding-top: 3rem;
-    border-top: 1rem solid rgba(255, 255, 190, 0.18);
+    margin-top: 6rem;
+}
+#wgmod-root .wg-tip-opts::before {
+    content: "";
+    display: block;
+    height: 7rem;
+    margin: 0 0 6rem;
+    background: url('img://gui/maps/icons/tooltip/divider.png') center / contain no-repeat;
 }
 #wgmod-root .wg-tip-opt {
-    font-size: 11rem;
+    font-size: 15rem;
     font-weight: 400;
+    line-height: 1.15;
     color: #d8d2c6;
     padding: 1rem 0;
 }
 #wgmod-root .wg-tip-opt:not(:last-child)::after {
     content: "or";
     display: block;
-    font-size: 9rem;
+    font-size: 11rem;
     font-weight: 700;
     letter-spacing: 0.5rem;
     text-transform: uppercase;
     color: #8e867d;
-    margin: 1rem 0;
+    margin: 2rem 0;
 }
 
 #wgmod-root .wg-tip-xp {
-    margin-top: 4rem;
-    font-size: 11rem;
+    margin-top: 3rem;           /* sits tight under the title */
+    font-size: 15rem;
     font-weight: 700;
     color: #ecca9d;             /* currency tan, like the XP figures */
 }
 #wgmod-root .wg-tip-status {
-    margin-top: 2rem;
-    font-size: 10rem;
+    margin-top: 4rem;
+    font-size: 13rem;
     font-weight: 700;
     letter-spacing: 0.5rem;
     text-transform: uppercase;

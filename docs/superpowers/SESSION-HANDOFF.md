@@ -1,9 +1,16 @@
 # Session Handoff — Research-Progress Bar (Phase 2, in-game working)
 
-_Updated 2026-06-29 (tooltips session). Read tools/dev/README.md for the dev
-loop — note the hot-reload loop for JS/CSS-only changes (used throughout). NEXT
-SESSION FOCUS: more small visual improvements (polish/position/sizing tuning) —
-all hot-reloadable JS/CSS; no specific blocker._
+_Updated 2026-06-29 (visual-polish session 2). Read tools/dev/README.md for the
+dev loop — the hot-reload loop for JS/CSS-only changes was used throughout this
+session. **NEXT SESSION FOCUS: replace the "Fully researched" COMPLETE fallback
+with an ELITE SYSTEM PROGRESSION view** (owner-set). OPEN QUESTION before
+building: an earlier decompiled finding recorded that **EU dropped Paragons /
+elite milestones** (see Gotchas), so step 1 is to pin down what "elite
+progression" means in EU 2.3 today (crew/vehicle prestige? a post-field-mods
+track? demountable/experimental equipment?) — clarify with the owner AND verify
+against the decompiled source (`C:\Users\Dmytro Vasylkivskyi\wot-eu`, branch 2.3)
+before designing. This is a DATA/DOMAIN change (new mode in the builder + adapter
+reads), so it needs the Python build+deploy+relaunch loop, not just hot-reload._
 
 ## TL;DR — where we are
 The mod **works in-game** on WoT **EU 2.3.0.1**. The Garage bar renders from live
@@ -20,6 +27,43 @@ now uses **real in-game icons**:
 - **COMPLETE state** → class+elite badge (e.g. `mediumTank_elite.png`).
 
 Branch `main`, unpushed. Tests green (23, py3), 2.7-compiles clean.
+
+**DONE THIS SESSION (visual polish 2 — all JS/CSS, hot-reloaded, owner-verified
+in-game):**
+- **Tooltips restyled to the native garage look** (`.wg-tooltip`): the panel is
+  the client's own 9-slice frame `img://gui/maps/icons/tooltip/background_with_border.png`
+  (border-image, slice 4 fill / 4rem round) + native deep shadow, with a solid
+  dark fallback behind it. Layout reordered to **title → XP → divider + variant
+  description**, where the `img://gui/maps/icons/tooltip/divider.png` rule + the
+  field-mod variant names appear ONLY when options exist. Native type tokens
+  (17rem title #ede6d9, 15rem body, currency-tan XP).
+- **Unified "Total XP" readout** (replaced the old two-pool combat+free readout):
+  one figure = `fillVehicle + fillFree` (vehicle combat XP + global free XP, the
+  same sum the research screen's `getVehTotalXP` shows), value then icon, pinned
+  so the **icon centers on the bar's right edge**. Icon = the Research screen's
+  own Total-XP-row glyph **`img://gui/maps/icons/vehicle_hub/research_purchase/total_experience.png`**
+  (found via `gui/impl/gen/resources/images.py` → `_research_purchase.total_experience`;
+  NOT a `library/currency` star). The `_elite` sibling exists but its 16x16 art is
+  drawn smaller + offset low, so we use the clean base glyph in every mode.
+  Counter is comma-separated (`fmtXp(n, ",")`); tooltip XP keeps native spaces.
+  Font matches the label/counter: 13rem / 700 / letter-spacing 1rem.
+- **Category header icon**: now centered on the bar's **left edge** (was outboard
+  −35rem); label group pushed right 14rem to clear it; base icons bumped to 36rem
+  (+2); **elite badge shrunk to 30rem** to match proportions; non-elite category
+  icons nudged up 1px (`margin-top:-1rem`, elite resets to 0).
+- **Ticks**: thinner (base 1rem / affordable 2rem / locked 1.5rem). **Locked**
+  ticks made visible (opacity 0.45→0.9, cool gray, dark halo) + locked glyphs
+  partially desaturated. **Field-mod hexagons** restyled to the menu look: dark
+  fill `#15181a` + thin light-tan border ring (two layered clip-path hexagons,
+  inner shrunk via `transform: scale(0.9)`), tan roman numeral.
+
+**Gameface notes learned this session (don't relearn):** `border-image` with an
+`img://` URL WORKS (slice/fill/width/round) — used for the native tooltip frame;
+keep a solid `background` behind it as a fallback. `transform: scale()` on a
+`::before` works (the hex border ring). Small currency/star PNGs have size-variant
+art that differs (the 24px elite star loses the split the 48px has) — VIEW the
+actual PNG before trusting a path. Flex `margin-left:auto` did NOT right-align in
+the header; use `justify-content: space-between` (or absolute positioning) instead.
 
 **DONE THIS SESSION — TOOLTIPS + field-mod names (both verified in-game):**
 - Real hover **tooltips** on ticks (name + XP), confirmed working. Implementation
@@ -132,9 +176,17 @@ docs/superpowers/research/decompiled-findings.md   # verified EU symbols
    - DONE: real hover **tooltips** (name + XP + field-mod pair variants), via the
      `.wg-hot` overlay + `mousemove` (see TL;DR + gotchas). Empty field-mod names
      also fixed.
-   - STILL TODO: general visual polish — **position/size** tuning against the live
-     hangar (current: `top: 190rem`), tooltip styling/offsets, and whatever small
-     improvements the owner raises next session. All hot-reloadable JS/CSS.
+   - DONE: general visual polish — two sessions of position/size/styling tuning
+     against the live hangar (icons, tooltips, the unified Total-XP readout, tick
+     + hexagon restyle). All owner-verified. Further small tweaks are still
+     hot-reloadable JS/CSS if raised.
+3a. **NEW FEATURE (next focus): elite system progression** — replace the
+   `COMPLETE` "Fully researched" fallback with a real elite-progression view. See
+   the header note: first define what the elite system is in EU 2.3 (the prior
+   "EU dropped Paragons/elite milestones" finding may be stale or may mean a
+   different mechanic — verify). This is a domain+adapter change (likely a new
+   `Mode` + builder branch + new adapter reads), so Python build+deploy+relaunch,
+   plus a new JS render path for that mode.
 3. **Finalize packaging & docs** (Task): remove the loose `res_mods` gameface
    overlay before a clean ship verification (it shadows the packaged assets — see
    gotcha); `meta.xml` name/id (consider
