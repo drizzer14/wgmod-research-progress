@@ -75,7 +75,7 @@ python tools/dev/sync_gameface.py "<install>" 2.3.0.1
 - **WoT 2.3 loads mods only from `.wotmod` in `mods/<version>/`.** `res_mods/<version>/`
   outranks `.wotmod`, so a stale loose copy silently shadows the package — always
   deploy via `deploy_wotmod.py` and keep `res_mods` clean for ship verification.
-- This build targets the **Wargaming EU/global** client, not the Lesta/Mir Tankov (RU) fork.
+- This build targets the **Wargaming EU/global** client (version 2.3.0.1), not other regional clients.
 
 ## Renaming the mod
 

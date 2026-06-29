@@ -66,9 +66,9 @@ B.refresh()
 ```
 
 ## Decompiled source (re-clone as needed; not in repo)
-Match the client's branch/region — use the **EU** branch, not the RU default:
+Match the client's branch/region — use the **EU** branch (`2.3`):
 ```
 & $git clone --depth 1 --branch 2.3 --single-branch https://github.com/StranikS-Scan/WorldOfTanks-Decompiled.git wot-eu
 ```
-(The default branch is MirTankov/Lesta RU — different client. Cross-check against
+(The repo's default branch is a different regional client — cross-check against
 the live `res/packages/scripts.pkg` by listing module filenames.)

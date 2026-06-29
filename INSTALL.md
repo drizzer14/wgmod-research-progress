@@ -20,8 +20,8 @@ switch vehicles.
 | **Game** | World of Tanks **EU (Wargaming)** client, version **2.3.0.1**. Built and tested against this version. |
 | **Dependency** | **OpenWG GameFace** — this is a *hard* dependency. The bar will not appear without it. |
 
-> ⚠️ **Region note:** this build targets the **Wargaming EU/global** client. It is
-> *not* built for the Lesta / Mir Tankov (RU) client, which is a diverged fork.
+> ⚠️ **Region note:** this build targets the **Wargaming EU/global** client
+> (version 2.3.0.1) and is not built for other regional clients.
 
 ---
 

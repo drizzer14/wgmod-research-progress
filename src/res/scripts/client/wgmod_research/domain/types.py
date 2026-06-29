@@ -13,8 +13,7 @@ bands (iron/bronze/silver/gold/enamel -> max). Certain tiers (the owner's tier X
 additionally grant **milestone rewards** (2D styles / attachments) at specific
 levels. So past COMPLETE the bar shows ELITE_REWARDS (tier-XI exclusive rewards,
 while any remain) -> ELITE (the grade-band progression) -> COMPLETE (no prestige
-data / fallback badge). The earlier "EU dropped elite/Paragons" note was wrong;
-it conflated this with Lesta's separate RU "Paragon" mechanic.
+data / fallback badge).
 """
 
 
