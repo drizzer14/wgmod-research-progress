@@ -7,7 +7,17 @@
 #wgmod-root {
     position: fixed;
     left: 50%;
-    top: 190rem;                /* just below the hangar vehicle name/XP header */
+    /* Vertical anchor in vh (viewport height), NOT rem: WoT's UI scale keeps
+       rem-SIZED things a constant apparent size but is quantized per resolution
+       bucket, so a rem top-offset drifts off the hangar header across resolutions
+       (it was right only at the 4K reference). vh is height-proportional and
+       unquantized, so it tracks the header's viewport-relative position on every
+       16:9 and 21:9 resolution. 17.6vh == the old 190rem at the 1080 design-px
+       baseline (190/1080); matches the 4K-calibrated position. To re-calibrate at
+       3840x2160 fullscreen, read the resolved px top in the hangar console:
+         getComputedStyle(document.getElementById('wgmod-root')).top  // px
+       then vh = px / window.innerHeight * 100. */
+    top: 17.6vh;                /* just below the hangar vehicle name/XP header */
     transform: translateX(-50%);
     width: 520rem;
     z-index: 9000;
