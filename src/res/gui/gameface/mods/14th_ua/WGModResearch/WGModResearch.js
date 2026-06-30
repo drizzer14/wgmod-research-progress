@@ -253,7 +253,8 @@ function ensureRoot() {
             '<div class="wg-hot"></div>' +
             '<div class="wg-tooltip"></div>' +
             "</div>" +
-            '<div class="wg-next"></div>';
+            '<div class="wg-next"></div>' +
+            '<div class="wg-final-label">Final upgrade available</div>';
         document.body.appendChild(root);
     }
     return root;
@@ -375,6 +376,11 @@ function render(model) {
     // appeared while the cursor was moving).
     const nextEl = root.querySelector(".wg-next");
     if (nextEl) nextEl.style.display = "none";
+    // "Final upgrade available" caption (skill_tree, capstone-only state). Hidden by
+    // default here -- before every early return + the elite branch -- so it only ever
+    // shows when the skill_tree branch below explicitly turns it on.
+    const finalLabel = root.querySelector(".wg-final-label");
+    if (finalLabel) finalLabel.style.display = "none";
 
     if (!data) {
         const keys = model ? Object.keys(model).join(",") : "no-model";
@@ -443,7 +449,16 @@ function render(model) {
     // Tier-XI available-upgrade chips: render the visuals + register their hit-zones
     // on .wg-hot (which owns pointer events). Rebuild ONLY when the upgrade set
     // changes, so a hovered chip's tooltip isn't wiped by background pushes.
-    if (mode === "skill_tree" && nextEl) {
+    // Capstone-only state: every node but the FINAL one is unlocked (done == total-1)
+    // and the final is available. That lone available node is already the bar's
+    // rightmost (final) tick, so the "Next available:" chip for it just duplicates
+    // that glyph -- drop the chips row and instead point a "Final upgrade available"
+    // caption at the right end (and brighten the final tick glyph in the loop below).
+    const stDone = data.fieldModsDone || 0;
+    const stTotal = data.fieldModsTotal || 0;
+    const onlyFinal = mode === "skill_tree" && stTotal > 0 &&
+        stDone === stTotal - 1 && arrLen(data.availUpgrades) >= 1;
+    if (mode === "skill_tree" && nextEl && !onlyFinal) {
         const sig = upgradesSig(data.availUpgrades);
         if (nextEl._wgSig !== sig) {
             nextEl._wgSig = sig;
@@ -456,6 +471,7 @@ function render(model) {
         nextEl._wgSig = null;
         hotEl._wgChips = [];
         setActiveChip(hotEl, null);
+        if (onlyFinal && finalLabel) finalLabel.style.display = "flex";
     }
     // NB: do NOT hide the tooltip here. render() runs on every model update
     // (which can fire while the cursor sits still over the bar); force-hiding it
@@ -512,9 +528,13 @@ function render(model) {
         const t = unwrap(ticks[i] !== undefined ? ticks[i] : ticks.get && ticks.get(i));
         if (!t) continue;
         const mark = document.createElement("div");
-        mark.className =
-            "wg-tick wg-cat-" + (t.category || "x") +
-            (t.locked ? " wg-locked" : t.affordable ? " wg-aff" : "");
+        // In the capstone-only state the final tick (the only skill_tree tick with an
+        // icon) is the available node, so render it bright (wg-aff) instead of the
+        // count-axis "right of fill" wg-locked dim -- matching the "Final upgrade
+        // available" caption rather than reading as locked.
+        let stateClass = t.locked ? " wg-locked" : t.affordable ? " wg-aff" : "";
+        if (onlyFinal && mode === "skill_tree" && t.icon) stateClass = " wg-aff";
+        mark.className = "wg-tick wg-cat-" + (t.category || "x") + stateClass;
         const leftPct = pct(t.position);
         mark.style.left = leftPct + "%";
         // Skill-tree count ticks carry no metadata, but the FINAL tick has a name
