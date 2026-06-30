@@ -82,8 +82,13 @@ OpenWG maintains a Gameface GitLab repo with releases for WoT 2.0.
 
 Wargaming publishes Fair Play guidelines. Allowed: UI, info, cosmetic, QoL mods. Forbidden: anything granting unfair advantage (auto-aim/bots, tundra/foliage removal, illegal laser sights, etc.). Check the Fair Play policy before designing features.
 
-## 8. Open questions (resolve when scope is known)
-- Exact current client version folder name to target
-- Whether the mod needs Gameface UI, Flash, pure-Python logic, or just XML/asset edits
-- Whether to depend on ModsSettings API / ModsList for config UI
-- Target distribution: personal `res_mods` vs. packaged `.wotmod` for the portal
+## 8. Resolved scope (this mod)
+- **Target client:** WoT EU `2.3.0.1` (`mods/2.3.0.1/`).
+- **UI:** Gameface (HTML/CSS/JS widget) driven by a Python data model; no Flash.
+- **Config UI:** none — no ModsSettings API / ModsList dependency. Hard dependency
+  on **OpenWG GameFace** only.
+- **Distribution:** packaged `.wotmod` (+ Inno Setup installer). Loose `res_mods`
+  does NOT load in 2.3 and is used only as a dev hot-reload overlay.
+
+See `CLAUDE.md` and the `.claude/skills/wgmod-*` skills for build/deploy,
+architecture, and release specifics.
