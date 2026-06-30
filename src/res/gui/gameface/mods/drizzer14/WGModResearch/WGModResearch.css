@@ -26,6 +26,31 @@
     pointer-events: none;
 }
 
+/* Whole-widget lift: a soft dark GLOW behind the bar so it reads as one floating
+   panel over the busy hangar scene, with NO hard backing plate. Two approaches were
+   wrong: a root filter:drop-shadow hugs each thin element's alpha (never a panel
+   shape), and a box-shadow on a transparent box doesn't render in Gameface (every
+   box-shadow that works here is on a FILLED element). So the glow is a painted
+   radial-gradient that fades to transparent at the edges -- guaranteed to render
+   (gradients do; the notch pattern uses one), soft-edged so there's no plate seam.
+   Box is extended past the widget (negative insets) so the cloud surrounds the bar;
+   z-index:-1 + pointer-events:none keep it behind all content and drag-through. */
+#wgmod-root::before {
+    content: "";
+    position: absolute;
+    top: -10rem;                /* shallow up-reach: don't bleed onto the game's own
+                                   vehicle-name/XP header sitting just above the bar */
+    left: -88rem;               /* wider than tall -> the ellipse stretches horizontally */
+    right: -88rem;
+    bottom: -34rem;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center,
+        rgba(0, 0, 0, 0.42) 0%,
+        rgba(0, 0, 0, 0.22) 42%,
+        rgba(0, 0, 0, 0) 78%);
+}
+
 #wgmod-root .wg-head {
     position: relative;
     display: flex;
@@ -208,6 +233,9 @@
     position: absolute;
     top: 0;
     bottom: 0;
+    /* Ease fill growth instead of hard-cutting when XP changes / vehicle switches.
+       Gameface that drops `transition` just falls back to the instant cut. */
+    transition: left 0.3s ease, width 0.3s ease;
 }
 
 /* Flat fills, like the client's reusable EditableProgress bar (its fill is a
@@ -222,6 +250,14 @@
 #wgmod-root .wg-fill-free {
     background: #ecca9d;
     opacity: 0.95;
+}
+
+/* skill_tree ("Upgrades"): its own steel-blue fill, distinct from the tech-tree
+   combat-XP tone. skill_tree sets fill_free=0 (builder.py:75) so only the
+   vehicle segment shows -- no two-tone. */
+#wgmod-root.wg-skill .wg-fill-veh {
+    background: #5a8fc4;
+    opacity: 1;
 }
 
 /* COMPLETE state: a full bar in the native "done" green. */
@@ -652,6 +688,7 @@
     height: 30rem;
     margin-right: 8rem;
     pointer-events: none;       /* visual only; .wg-hot hit-tests + handles hover/click */
+    transition: transform 0.12s ease;   /* ease the hover lift below */
 }
 #wgmod-root .wg-chip-hot { transform: scale(1.1); }   /* JS-toggled hover lift */
 /* frame: a thin light ring over a translucent dark disc, centered in the box --

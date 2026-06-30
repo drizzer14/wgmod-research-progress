@@ -480,8 +480,8 @@ function render(model) {
     // nodes unlocked), with one evenly-spaced tick per node -- bright left of the
     // fill (unlocked), dim to the right (locked) -- and the signature 'final'
     // upgrade carrying its icon on the rightmost tick. No per-node tooltips (the
-    // tick loop below skips hover wiring for this mode). wg-skill is a hook for any
-    // later fill-tone tuning (the default combat-XP tone is used now).
+    // tick loop below skips hover wiring for this mode). wg-skill gives the fill its
+    // own steel-blue tone (.wg-skill .wg-fill-veh in CSS), distinct from tech-tree.
     root.className = mode === "skill_tree" ? "wg-skill" : "";
 
     label.textContent = mode === "skill_tree" ? "Upgrades"
