@@ -4,6 +4,10 @@ Recorded ideas for the mod. Entries are deleted once implemented.
 
 ## Open
 
+### Align upgrades category icon with its label
+The Upgrades (tier-XI / skill-tree) category icon is too large right now and sits
+poorly next to its label — resize it down and align it properly with the label text.
+
 ### Tier-XI mode: "Final upgrade available" state
 In tier-XI upgrade (skill-tree) mode, when only the final upgrade remains available,
 drop the "Next available" chips block and instead show a "Final upgrade available"
