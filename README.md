@@ -50,7 +50,7 @@ dist/                # build output (gitignored)
 ### Build a distributable package (Python 2.7.18)
 
 ```sh
-python build/build_wotmod.py        # -> dist/com.14th_ua.garageprogressbar_0.1.2.wotmod
+python build/build_wotmod.py        # -> dist/com.14th_ua.garageprogressbar_0.2.0.wotmod
 ```
 
 ### Build + deploy into a local WoT install (Python 2.7.18, client CLOSED)

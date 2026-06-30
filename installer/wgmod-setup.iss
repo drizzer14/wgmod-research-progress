@@ -13,8 +13,8 @@
 ;         .wotmod already built into ..\dist by build\build_wotmod.py).
 
 #define ModId        "com.14th_ua.garageprogressbar"
-#define ModVersion   "0.1.2"
-#define ModWotmod    "com.14th_ua.garageprogressbar_0.1.2.wotmod"
+#define ModVersion   "0.2.0"
+#define ModWotmod    "com.14th_ua.garageprogressbar_0.2.0.wotmod"
 #define OpenWgWotmod "net.openwg.gameface_1.1.6.wotmod"
 #define MsaWotmod    "izeberg.modssettingsapi_1.7.0.wotmod"
 
