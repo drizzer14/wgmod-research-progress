@@ -47,7 +47,8 @@ def resolve(snapshot):
             xp_gained=0,
             xp_required=(snapshot.skilltree_final_xp if is_final else 0),
             affordable=(i <= done), completed=(i <= done),
-            locked=(i > done)))
+            locked=(i > done),
+            effect=(snapshot.skilltree_final_effect if is_final else "")))
 
     return {
         "scale_min": 0,

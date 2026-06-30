@@ -40,6 +40,32 @@ that skill).
 - Localization: `action.getLocNameRes()` returns a Wulf `DynAccessor` — CALL it for the
   res id, then `gui.impl.backport.text(res_id)`. Skill-tree names:
   `R.strings.veh_skill_tree.tooltips.title.dyn(<imageName>)` → `backport.text`.
+- Post-progression **effect/bonus text** (field mods + skill-tree perks; verified
+  EU 2.3 on Strv 103B + Strv 107-12): the step's `action` has NO `description`/
+  `getDescriptionRes` — `getTooltip()` returns a `PostProgressionActionTooltip` ENUM
+  (type selector, not text). The numeric effect lives on `action._descriptor`:
+  - `SimpleModItem._descriptor` is a `Modification` with `.kpi` (list of `KPI`) and
+    `.modifiers`. Each `KPI` has `.getDescriptionR()`/`.getLongDescriptionR()`
+    (DynAccessor → `backport.text` → a phrase like `"to concealment after firing"`),
+    `.type` (`'mul'` observed), `.value` (e.g. `1.10`, `0.99`), `.isPositive`,
+    `.isDebuff`. Effect string = sign + `(value-1)*100` rounded + `"% "` + desc →
+    `"+10% to concealment after firing"`.
+  - `FeatureModItem` / `RoleSlotModItem._descriptor` is a `ProgressionFeature`
+    (`name`, `locName`, `tooltipSection`, `imgName`) with NO `kpi` — only a richer
+    descriptive name via `action.getLocSplitNameRes()` (e.g. "Alternate
+    Configuration: Essentials Loadout"). No numeric effect.
+  - Skill-tree nodes describe themselves in a localized SENTENCE template at
+    `R.strings.veh_skill_tree.tooltips.description.dyn(<imageName>)` (imageName =
+    `action.getImageName()`), e.g. "Reduces gun reload time by {value}% in Pillbox
+    mode." Fill `{value}` with the node's KPI magnitude (`|kpi.value-1|*100`) and strip
+    `{colorTagOpen}`/`{colorTagClose}`. This is the RIGHT effect source for skill-tree
+    nodes incl. the **major/final** "mechanic" perks (whose KPI is the unlabeled generic
+    `name='value'` with EMPTY `getDescriptionR()` — so the KPI-phrase path gives nothing).
+    The matching title is `...tooltips.title.dyn(imageName)` (the action's own
+    `getLocNameRes()` is the generic "Modification"). Returns "" for features/role-slots
+    (no entry).
+  - No ready KPI→text formatter at `gui.impl.lobby.common.kpi_helpers` /
+    `gui.shared.formatters.kpi` (don't exist) — format the magnitude ourselves.
 - Prestige (`gui.prestige.prestige_helpers as ph`):
   `ph.hasVehiclePrestige(cd, checkElite=True)` (gate),
   `ph.getVehiclePrestige(cd)` → `.currentLevel`, `.remainingPoints`,

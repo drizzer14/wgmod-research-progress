@@ -654,7 +654,7 @@
 }
 /* Title -- native `.Index_title` token (primary parchment, semibold). */
 #wgmod-root .wg-tip-name {
-    font-size: 14rem;
+    font-size: 16rem;
     font-weight: 600;
     color: #ede6d9;
     opacity: 0.95;
@@ -672,7 +672,7 @@
     margin-bottom: 3rem;
 }
 #wgmod-root .wg-tip-variant {
-    font-size: 14rem;           /* title weight/size, like .wg-tip-name */
+    font-size: 16rem;           /* title weight/size, like .wg-tip-name */
     font-weight: 600;
     color: #ede6d9;
     opacity: 0.95;
@@ -686,7 +686,9 @@
     letter-spacing: 0.5rem;
     text-transform: uppercase;
     color: #8e867d;
-    margin: 2rem 0;
+    /* generous gap so the first variant's buffs sit clear of the next variant's
+       title (the "or" floats between the two choices). */
+    margin: 9rem 0 8rem;
 }
 
 #wgmod-root .wg-tip-xp {
@@ -701,6 +703,43 @@
     font-weight: 700;
     letter-spacing: 0.5rem;
     color: #8e867d;             /* dim, matches the locked-tick gray */
+}
+/* Affordability shortfall ("Need X more XP"): the status row recolored to WG's
+   "not enough resources" alert tone -- a muted warm red that reads on the dark
+   tooltip without fighting the parchment palette. Append-only color override on
+   top of .wg-tip-status. NB: approximate native alert tint; verify against the
+   in-client tooltip if an exact match is wanted. */
+#wgmod-root .wg-tip-short {
+    color: #d96e5a;
+}
+/* Effect/bonus line ("+1% to concealment") -- WG's tooltip description body:
+   tertiary parchment, normal weight, wrapping. Sits between the title and the XP
+   cost, mirroring the native parameter rows. One row per KPI. */
+#wgmod-root .wg-tip-effect {
+    margin-top: 2rem;
+    font-size: 12rem;
+    font-weight: 400;
+    color: #8e867d;
+    line-height: 1.25;
+}
+/* Section divider -- the SAME divider art WG's carousel vehicle tooltip uses to
+   split its sections (its .Tooltip_section::after draws
+   img://gui/maps/icons/tooltip/divider.png at center/contain, ~9rem tall), so the
+   bar's tooltip reads identically to native. Inserted only between two non-empty
+   sections (see joinSections in the JS). */
+#wgmod-root .wg-tip-div {
+    height: 9rem;
+    margin: 4rem 0;
+    background: url('img://gui/maps/icons/tooltip/divider.png') no-repeat center / contain;
+}
+/* A choice variant's own buffs, listed under its name (tertiary body, wrapping).
+   The variant NAME keeps the title weight it inherits from .wg-tip-variant. */
+#wgmod-root .wg-tip-variant-eff {
+    margin-top: 1rem;
+    font-size: 12rem;
+    font-weight: 400;
+    color: #8e867d;
+    line-height: 1.25;
 }
 
 /* Clickable ticks (research / unlock / open-screen targets). Clicks are routed

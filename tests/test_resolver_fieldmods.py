@@ -3,9 +3,37 @@ from wgmod_research.domain import types as t
 from wgmod_research.domain.resolvers import fieldmods
 
 
-def _step(sid, cost, unlocked=False, level=0):
+def _step(sid, cost, unlocked=False, level=0, description="",
+          options=None, option_effects=None):
     return t.ProgressionStep(step_id=sid, name="fm%d" % sid, icon="fm%d.png" % sid,
-                             xp_cost=cost, unlocked=unlocked, level=level)
+                             xp_cost=cost, unlocked=unlocked, level=level,
+                             description=description, options=options,
+                             option_effects=option_effects)
+
+
+def test_effect_passes_through_to_tick():
+    snap = t.VehicleSnapshot(
+        tier=9, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[_step(1, 2000, description="+1% to concealment"),
+                         _step(2, 4000)])
+    ticks = fieldmods.resolve(snap)
+    assert ticks[0].effect == "+1% to concealment"
+    assert ticks[1].effect == ""
+
+
+def test_choice_variant_names_and_effects_pass_through():
+    # A choice level carries both variant names (options) and each variant's own
+    # buffs (option_effects), aligned by index, onto the tick for the tooltip.
+    snap = t.VehicleSnapshot(
+        tier=9, is_elite=True, vehicle_xp=0, free_xp=0,
+        field_mod_steps=[_step(1, 2000,
+                               options=["Reinforced Suspension", "Lightweight Suspension"],
+                               option_effects=["+30% to suspension durability",
+                                               "+5% to hull traverse speed"])])
+    ticks = fieldmods.resolve(snap)
+    assert ticks[0].options == ["Reinforced Suspension", "Lightweight Suspension"]
+    assert ticks[0].option_effects == ["+30% to suspension durability",
+                                       "+5% to hull traverse speed"]
 
 
 def test_orders_by_step_sequence_cumulatively_skipping_unlocked():

@@ -44,8 +44,8 @@ def build_snapshot():
     is_skill_tree = _is_skill_tree(veh)
     fm_steps, fm_done, fm_total = _read_post_progression(veh)
     (st_total_xp, st_spent_xp, st_done, st_total, st_final_icon,
-     st_final_name, st_final_xp, st_available) = (
-        _read_skill_tree(veh) if is_skill_tree else (0, 0, 0, 0, "", "", 0, []))
+     st_final_name, st_final_xp, st_final_effect, st_available) = (
+        _read_skill_tree(veh) if is_skill_tree else (0, 0, 0, 0, "", "", 0, "", []))
     prestige = _read_prestige(veh)
 
     return t.VehicleSnapshot(
@@ -71,7 +71,8 @@ def build_snapshot():
         skilltree_total_xp=st_total_xp, skilltree_spent_xp=st_spent_xp,
         skilltree_done=st_done, skilltree_total=st_total,
         skilltree_final_icon=st_final_icon, skilltree_final_name=st_final_name,
-        skilltree_final_xp=st_final_xp, skilltree_available=st_available)
+        skilltree_final_xp=st_final_xp, skilltree_final_effect=st_final_effect,
+        skilltree_available=st_available)
 
 
 # --- helpers ---------------------------------------------------------------
@@ -97,6 +98,37 @@ def _safe_stats():
         return None
 
 
+# Roman numerals for vehicle tiers (1..11). Used for the next-vehicle tooltip
+# caption ("Tier IX"), matching the in-game tier notation.
+_ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"]
+
+
+def _roman(n):
+    n = int(n or 0)
+    if 0 < n < len(_ROMAN):
+        return _ROMAN[n]
+    return str(n) if n > 0 else ""
+
+
+# Module GUI_ITEM_TYPE -> tooltip caption. Built with getattr so a renamed/missing
+# enum member just drops out of the map rather than breaking import.
+_MODULE_KIND_LABELS = dict(
+    (getattr(GUI_ITEM_TYPE, attr), label)
+    for attr, label in (("GUN", "Gun"), ("TURRET", "Turret"), ("ENGINE", "Engine"),
+                        ("CHASSIS", "Chassis"), ("RADIO", "Radio"))
+    if getattr(GUI_ITEM_TYPE, attr, None) is not None)
+
+
+def _unlock_name(cache, int_cd):
+    """Localized display name for an unlock id, or "" on any read failure (so one
+    bad prerequisite never sinks the whole unlock row)."""
+    try:
+        return getattr(cache.items.getItemByCD(int_cd), "userName", "") or ""
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+        return ""
+
+
 def _read_tech_unlocks(veh, unlocks):
     """Tech-tree unlocks: modules + next vehicles (incl. Tier XI) via the
     vehicle's unlock graph. getUnlocksDescrs() yields (idx, xpCost, intCD, prereqs)."""
@@ -105,7 +137,8 @@ def _read_tech_unlocks(veh, unlocks):
         out = []
         for _idx, xp_cost, int_cd, prereqs in veh.getUnlocksDescrs():
             try:
-                is_vehicle = getTypeOfCompactDescr(int_cd) == GUI_ITEM_TYPE.VEHICLE
+                item_type = getTypeOfCompactDescr(int_cd)
+                is_vehicle = item_type == GUI_ITEM_TYPE.VEHICLE
                 item = cache.items.getItemByCD(int_cd)
                 name = getattr(item, "userName", "") or ""
                 # item.icon is the right art for both kinds, as img:// URLs:
@@ -116,14 +149,27 @@ def _read_tech_unlocks(veh, unlocks):
                 #    iconSmall -- that's the carousel contour strip, cropped
                 #    edge-to-edge so it reads as "cut off".
                 icon = getattr(item, "icon", "") or ""
+                # Tooltip caption: a next vehicle shows its tier ("Tier IX"); a
+                # module shows its type ("Gun"/"Turret"/...). item.level on a
+                # vehicle item is its tier.
+                if is_vehicle:
+                    tier = int(getattr(item, "level", 0) or 0)
+                    kind_label = ("Tier " + _roman(tier)) if tier else ""
+                else:
+                    kind_label = _MODULE_KIND_LABELS.get(item_type, "")
             except Exception:
                 LOG_CURRENT_EXCEPTION()
-                is_vehicle, name, icon = False, "", ""
+                is_vehicle, name, icon, kind_label = False, "", "", ""
+            # Names of the prerequisite items not yet researched -> "Requires: ..."
+            # in the tooltip. Only resolved when something is actually missing.
+            missing = [p for p in prereqs if p not in unlocks]
+            prereq_names = [nm for nm in (_unlock_name(cache, p) for p in missing) if nm]
             out.append(t.UnlockItem(
                 int_cd=int_cd, name=name, icon=icon, xp_cost=int(xp_cost),
                 kind=("vehicle" if is_vehicle else "module"),
                 researched=(int_cd in unlocks),
-                prereqs_met=all(p in unlocks for p in prereqs)))
+                prereqs_met=(not missing),
+                kind_label=kind_label, prereq_names=prereq_names))
         return out
     except Exception:
         LOG_CURRENT_EXCEPTION()
@@ -244,6 +290,7 @@ def _read_skill_tree(veh):
     final_icon = ""
     final_name = ""
     final_xp = 0
+    final_effect = ""
     available = []
     seen = set()
     try:
@@ -277,7 +324,8 @@ def _read_skill_tree(veh):
                     available.append(t.ProgressionStep(
                         step_id=step_id, name=_skilltree_name(step.action, node_type),
                         icon=_skilltree_icon(node_type, image_name),
-                        xp_cost=xp_cost, unlocked=False))
+                        xp_cost=xp_cost, unlocked=False,
+                        description=_skilltree_effect(step.action)))
                 # the signature 'final' upgrade -> its icon + name + cost for the end
                 # tick (which carries a tooltip like the available chips).
                 if node_type == "final" and not final_icon:
@@ -287,14 +335,15 @@ def _read_skill_tree(veh):
                         final_icon = _skilltree_icon("final", image_name)
                         final_name = _skilltree_name(action, "final")
                         final_xp = xp_cost
+                        final_effect = _skilltree_effect(action)
             except Exception:
                 LOG_CURRENT_EXCEPTION()
                 continue
         return (total_xp, spent_xp, done, total, final_icon, final_name, final_xp,
-                available)
+                final_effect, available)
     except Exception:
         LOG_CURRENT_EXCEPTION()
-        return 0, 0, 0, 0, "", "", 0, []
+        return 0, 0, 0, 0, "", "", 0, "", []
 
 
 def _read_post_progression(veh):
@@ -364,11 +413,14 @@ def _read_post_progression(veh):
                 if xp_cost <= 0:
                     continue  # non-XP leveled step (rare) -> not on the bar
                 name, icon = _step_label(step)
+                pair = pairs_by_parent.get(step.stepID, [])
                 steps.append(t.ProgressionStep(
                     step_id=step.stepID, name=name, icon=icon,
                     xp_cost=xp_cost, unlocked=received,
                     level=level,
-                    options=pairs_by_parent.get(step.stepID, [])))
+                    options=[p[0] for p in pair],
+                    option_effects=[p[1] for p in pair],
+                    description=_action_effect(step.action)))
             except Exception:
                 LOG_CURRENT_EXCEPTION()
                 continue
@@ -541,11 +593,15 @@ def _read_reward_art(ph, veh_cd, level, milestones, is_done):
 
 
 def _pair_options(action):
-    """The selectable variant names of a MultiModsItem's pair, e.g.
-    ["Anti-Reflective Optics Coating", "External Vision System"]. Each entry in
-    action.modifications resolves its display name the same way a step action
-    does (getLocNameRes() -> DynAccessor -> backport.text). Best-effort; returns
-    [] on any failure."""
+    """[(variant_name, inline_effect), ...] for a MultiModsItem's selectable
+    variants, e.g. [("Reinforced Suspension", "+30% to suspension durability\n
+    -5% to hull traverse speed"), ...]. Each `modification` resolves its name the
+    same way a step action does (getLocNameRes -> DynAccessor -> backport.text) and
+    carries its OWN KPI buffs (one per line, TAB-joined here -- the view renders one
+    row each) -- so a choice level shows BOTH variants and ALL their buffs, not just
+    the base mod's. TAB (not newline) because the VM joins the per-variant strings
+    with newline; the view splits variants on \n, then buffs on \t. Best-effort;
+    returns [] on failure, ("name", "") when a variant has no readable KPI."""
     out = []
     try:
         from gui.impl import backport
@@ -554,14 +610,114 @@ def _pair_options(action):
                 acc = mod.getLocNameRes()
                 res_id = acc() if callable(acc) else acc
                 name = backport.text(res_id) or ""
-                if name:
-                    out.append(name)
+                if not name:
+                    continue
+                out.append((name, u"\t".join(_kpi_lines(mod))))
             except Exception:
                 LOG_CURRENT_EXCEPTION()
                 continue
     except Exception:
         LOG_CURRENT_EXCEPTION()
     return out
+
+
+def _fmt_pct(pct):
+    """A KPI 'mul' delta rendered as a signed percent ("+10%", "-1%"). "" if it
+    rounds to zero (no meaningful change)."""
+    r = round(pct)
+    if abs(pct - r) < 0.05:
+        n = int(r)
+        return "" if n == 0 else ("%+d%%" % n)
+    return "%+.1f%%" % pct
+
+
+def _kpi_objs(action):
+    """The raw KPI objects on an action's descriptor (action._descriptor.kpi), or []."""
+    d = getattr(action, "_descriptor", None)
+    return getattr(d, "kpi", None) or []
+
+
+def _kpi_lines(action):
+    """The effect/bonus lines for a post-progression action, from its KPI list:
+    one "<signed %> <stat phrase>" string per KPI that carries a description (e.g.
+    "+10% to concealment after firing"). Empty list for actions with no KPI
+    (features / role slots) or only the generic unlabeled 'value' KPI (signature
+    mechanic perks -- effect not exposed as text). The KPI value is a multiplier
+    ('mul'); the percent is (value-1)*100. Best-effort, never raises.
+
+    KPI shape verified live (EU 2.3): action._descriptor.kpi -> [KPI], each with
+    getDescriptionR() (DynAccessor -> backport.text -> phrase), .type, .value.
+    A MultiModsItem variant (a `modification`) carries its KPI the same way."""
+    lines = []
+    try:
+        from gui.impl import backport
+        for k in _kpi_objs(action):
+            try:
+                acc = k.getDescriptionR()
+                desc = backport.text(acc() if callable(acc) else acc) or ""
+            except Exception:
+                desc = ""
+            if not desc:
+                continue  # generic unlabeled 'value' KPI -> no displayable stat
+            prefix = ""
+            if (getattr(k, "type", "") or "") == "mul":
+                val = getattr(k, "value", None)
+                if isinstance(val, float):
+                    prefix = _fmt_pct((val - 1.0) * 100.0)
+            lines.append((prefix + " " + desc) if prefix else desc)
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+    return lines
+
+
+def _action_effect(action):
+    """Newline-joined effect summary for a single action (see _kpi_lines)."""
+    return "\n".join(_kpi_lines(action))
+
+
+def _fmt_num(pct):
+    """A bare magnitude for a tier-XI description template's {value} slot: an int
+    when it rounds clean, else one decimal (no sign -- the template's wording
+    carries the direction, e.g. 'Reduces ... by {value}%')."""
+    r = round(pct)
+    if abs(pct - r) < 0.05:
+        return str(int(r))
+    return "%.1f" % pct
+
+
+def _skilltree_effect(action):
+    """Effect/bonus text for a tier-XI skill-tree node. Unlike the linear field
+    mods (whose KPI carries the phrase), skill-tree nodes -- especially the
+    signature 'mechanic' perks (major/final), whose KPI is the unlabeled generic
+    'value' -- describe themselves in a localized SENTENCE template keyed by image
+    name: R.strings.veh_skill_tree.tooltips.description.dyn(<imageName>), e.g.
+    "Reduces gun reload time by {value}% in Pillbox mode." We fill {value} with the
+    node's KPI magnitude (|value-1|*100) and strip the {colorTagOpen/Close} markup.
+    Verified live (EU 2.3). Returns "" when there's no description entry (features /
+    role slots). Best-effort, never raises."""
+    try:
+        from gui.impl import backport
+        from gui.impl.gen import R
+        image_name = _safe(lambda: action.getImageName(), "") or ""
+        if not image_name:
+            return ""
+        rid = R.strings.veh_skill_tree.tooltips.description.dyn(image_name)
+        tmpl = backport.text(rid() if callable(rid) else rid) or ""
+        if not tmpl or tmpl.startswith("#"):
+            return ""  # no localized description for this node
+        value = ""
+        for k in _kpi_objs(action):
+            if (getattr(k, "type", "") or "") == "mul":
+                v = getattr(k, "value", None)
+                if isinstance(v, float):
+                    value = _fmt_num(abs((v - 1.0) * 100.0))
+                    break
+        return (tmpl.replace("{value}", value)
+                    .replace("{colorTagOpen}", "")
+                    .replace("{colorTagClose}", "").strip())
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+        return ""
 
 
 def _step_label(step):

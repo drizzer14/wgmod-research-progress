@@ -47,6 +47,23 @@ def test_tech_tree_fill_is_two_segments():
     assert [tk.affordable for tk in m.ticks] == [True, False]
 
 
+def test_spendable_xp_is_vehicle_plus_free_xp():
+    # spendable_xp (vehicle combat XP + global free XP) is set on the model in
+    # every mode, so the view can show per-item affordability. Tech-tree here;
+    # field-mods below confirm a second mode.
+    snap = t.VehicleSnapshot(tier=6, is_elite=False, vehicle_xp=800, free_xp=300,
+                             tech_unlocks=[_u(1, 1000)])
+    m = build_model(snap)
+    assert m.mode == t.Mode.TECH_TREE
+    assert m.spendable_xp == 1100
+
+    fm = t.VehicleSnapshot(tier=10, is_elite=True, vehicle_xp=1000, free_xp=200,
+                           field_mod_steps=[_step(1, 2000)])
+    mfm = build_model(fm)
+    assert mfm.mode == t.Mode.FIELD_MODS
+    assert mfm.spendable_xp == 1200
+
+
 def test_elite_with_remaining_unlocks_is_tech_tree():
     # Regression: veh.isElite can be True (eliteVehicles membership) while modules
     # are still unresearched (e.g. Leopard 1). Research must win over field mods.
@@ -198,22 +215,37 @@ def _grades():
             t.EliteGrade(10, "bronze", 1, True), t.EliteGrade(20, "prestige", -1, True)]
 
 
-def _elite_snap(rewards=None, grades=None, level=12):
+def _elite_snap(rewards=None, grades=None, level=12, level_xp=None, current_xp=0):
     return t.VehicleSnapshot(
         tier=11, is_elite=True, vehicle_xp=99999, free_xp=500,
         has_prestige=True, elite_level=level, elite_max_level=20,
         elite_grades=grades if grades is not None else _grades(),
-        elite_rewards=rewards or [])
+        elite_rewards=rewards or [],
+        elite_level_xp=level_xp or {}, elite_current_xp=current_xp)
 
 
 def test_elite_rewards_mode_when_rewards_unearned():
-    snap = _elite_snap(rewards=[t.EliteReward(50, True), t.EliteReward(100, False)])
+    snap = _elite_snap(rewards=[t.EliteReward(50, True), t.EliteReward(100, False)],
+                       level_xp={12: 800000}, current_xp=12345)
     m = build_model(snap)
     assert m.mode == t.Mode.ELITE_REWARDS
     assert m.elite_level == 12
     assert m.elite_max_level == 20
     assert m.fill_free == 0                 # single segment in elite modes
-    assert m.combat_xp == 99999             # cumulative combat XP, not +free
+    # cumulative combat XP = XP-to-reach-current-level + progress within it
+    # (NOT the unspent research XP / vehicle_xp=99999, the old bug).
+    assert m.combat_xp == 812345
+
+
+def test_elite_combat_xp_is_cumulative_not_research_xp():
+    # ELITE band + ELITE_REWARDS both reconstruct cumulative combat XP the same way.
+    snap = _elite_snap(rewards=[], level=10, level_xp={10: 650000}, current_xp=4000)
+    m = build_model(snap)
+    assert m.mode == t.Mode.ELITE
+    assert m.combat_xp == 654000
+    # the -1 "no progress data" sentinel floors to 0 (no negative drift).
+    snap2 = _elite_snap(rewards=[], level=10, level_xp={10: 650000}, current_xp=-1)
+    assert build_model(snap2).combat_xp == 650000
 
 
 def test_elite_grade_mode_when_all_rewards_earned():

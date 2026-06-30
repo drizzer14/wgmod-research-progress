@@ -114,42 +114,101 @@ function tickName(t) {
     return "";
 }
 
-// Tooltip body for a tick. For a field-mod level that offers an A/B choice the
-// TITLE is its two selectable variants (each distinct) under a small level
-// caption -- the leveled step's own base-mod label repeats across every choice
-// level, so titling by it made them all read identically. Every other tick
-// (single-mod field levels, tech-tree) keeps the base name as the title. XP sits
-// below the title; a status line is appended when the tick is locked.
-function tooltipHtml(t) {
+// A faint horizontal rule between tooltip sections (mirrors WG's native tooltip
+// divider). joinSections() drops it between any two empty sections, so a divider
+// only ever appears where two real sections meet.
+function joinSections(sections) {
+    return sections.filter(function (s) { return s; })
+        .join('<div class="wg-tip-div"></div>');
+}
+
+// Compact XP readout: "<have> / <need> XP" -- progress toward affording this item,
+// replacing the older verbose cost + "Need N more"/"Ready" pair. `need` is the
+// SAME quantity that gates the tick (cumulative bar position for ticks; the node
+// cost for chips), so the fraction reaching full == the item being affordable.
+// Tinted as a shortfall (warm red) until covered, currency-tan once it is.
+function xpFracHtml(have, need) {
+    need = need | 0;
+    if (need <= 0) return "";
+    have = have | 0;   // shown as-is, NOT capped to need (so surplus XP is visible)
+    const cls = have >= need ? "wg-tip-xp" : "wg-tip-xp wg-tip-short";
+    return '<div class="' + cls + '">' + fmtXp(have) + " / " + fmtXp(need) + " XP</div>";
+}
+
+// Effect/bonus lines (field-mod & skill-tree KPI text, e.g. "+1% to concealment"),
+// one tertiary-body row per line. The Python side joins multiple KPIs with "\n".
+// Empty string -> nothing rendered (features / mechanic perks carry no KPI text).
+function effectHtml(effect) {
+    const lines = (effect || "").split("\n").filter(function (s) { return s; });
+    let h = "";
+    for (let i = 0; i < lines.length; i++) {
+        h += '<div class="wg-tip-effect">' + escapeHtml(lines[i]) + "</div>";
+    }
+    return h;
+}
+
+// The A/B choice block for a field-mod choice level: EACH selectable variant's
+// name (title weight) with ALL its own buffs beneath it (tertiary) -- so both
+// variants and every buff show, not just the base mod's. "or" sits between the
+// variants (CSS ::after on the container). optEffects is aligned with opts by
+// index (a variant with no readable KPI just omits the buff line).
+function variantsHtml(opts, optEffects) {
+    let h = '<div class="wg-tip-variants">';
+    for (let i = 0; i < opts.length; i++) {
+        h += '<div class="wg-tip-variant">';
+        h += '<div class="wg-tip-variant-name">' + escapeHtml(opts[i]) + "</div>";
+        // Each variant's buffs are TAB-separated (Python); render one row each.
+        const buffs = (optEffects[i] || "").split("\t").filter(function (s) { return s; });
+        for (let j = 0; j < buffs.length; j++) {
+            h += '<div class="wg-tip-variant-eff">' + escapeHtml(buffs[j]) + "</div>";
+        }
+        h += "</div>";
+    }
+    return h + "</div>";
+}
+
+// Tooltip body for a tick, built as ordered sections joined by dividers for clear
+// hierarchy: HEADER (caption + title / choice variants) -> BODY (effect lines) ->
+// FOOTER ("have / need XP", or the prerequisite line when locked). A field-mod
+// choice level puts its selectable variants (each with its buffs) in the header
+// instead of a single title.
+function tooltipHtml(t, spendableXp) {
     const opts = (t.options || "").split("\n").filter(function (s) { return s; });
-    let html = "";
+    const optEffects = (t.optionEffects || "").split("\n");
+    let head = "", body = "", foot = "";
     if (t.category === "fieldmod") {
-        // "Field Modification <level>" sub-header on EVERY field-mod tick (incl. the
-        // toggleable single mods, not just the choice-pair levels).
         const r = romanize(t.level);
-        if (r) html += '<div class="wg-tip-caption">Field Modification ' + r + "</div>";
+        if (r) head += '<div class="wg-tip-caption">Field Modification ' + r + "</div>";
         if (opts.length) {
-            // Choice pair: the variants are the title; the container scopes the "or"
-            // separator (CSS) so it sits between them, not after the last.
-            html += '<div class="wg-tip-variants">';
-            for (let i = 0; i < opts.length; i++) {
-                html += '<div class="wg-tip-variant">' + escapeHtml(opts[i]) + "</div>";
-            }
-            html += "</div>";
+            // Choice level -> the selectable variants ARE the content (with buffs).
+            head += variantsHtml(opts, optEffects);
         } else {
             const name = tickName(t);
-            if (name) html += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
+            if (name) head += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
+            body = effectHtml(t.effect);
         }
-        html += '<div class="wg-tip-xp">' + fmtXp(t.xpRequired || 0) + " XP</div>";
     } else {
+        // Tech-tree kind caption ("Gun"/"Turret"/.../"Tier IX").
+        if (t.kindLabel) {
+            head += '<div class="wg-tip-caption">' + escapeHtml(t.kindLabel) + "</div>";
+        }
         const name = tickName(t);
-        if (name) html += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
-        html += '<div class="wg-tip-xp">' + fmtXp(t.xpRequired || 0) + " XP</div>";
+        if (name) head += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
+        body = effectHtml(t.effect);
     }
     if (t.locked) {
-        html += '<div class="wg-tip-status">Prerequisites not met</div>';
+        // Name the blocking prerequisites when known, else the generic line.
+        const reqs = (t.prereqNames || "").split("\n").filter(function (s) { return s; });
+        foot = reqs.length
+            ? '<div class="wg-tip-status">Requires: ' +
+                reqs.map(escapeHtml).join(", ") + "</div>"
+            : '<div class="wg-tip-status">Prerequisites not met</div>';
+    } else {
+        foot = xpFracHtml(spendableXp, t.position);
     }
-    return html;
+    // Title + its buffs are ONE unit (no divider between them); the divider only
+    // separates that unit from the footer (cost / prerequisite).
+    return joinSections([head + body, foot]);
 }
 
 function setCatIcon(el, url) {
@@ -278,7 +337,7 @@ function arrLen(a) {
 // proven-interactive layer, which spans this row's area): we register each chip's
 // element + command + tooltip in hotEl._wgChips, and ensureHover() hit-tests them by
 // bounding rect for hover (toggling the chip's own .wg-chip-tip) and click.
-function renderNextAvailable(nextEl, arr, hotEl) {
+function renderNextAvailable(nextEl, arr, hotEl, spendableXp) {
     nextEl.innerHTML = "";
     const chips = [];
     const n = arrLen(arr);
@@ -304,10 +363,12 @@ function renderNextAvailable(nextEl, arr, hotEl) {
             chip.appendChild(ico);
             const tip = document.createElement("div");
             tip.className = "wg-chip-tip";
-            let html = "";
-            if (u.name) html += '<div class="wg-tip-name">' + escapeHtml(u.name) + "</div>";
-            if (xp > 0) html += '<div class="wg-tip-xp">' + fmtXp(xp) + " XP</div>";
-            tip.innerHTML = html;
+            const cHead = u.name
+                ? '<div class="wg-tip-name">' + escapeHtml(u.name) + "</div>" : "";
+            const cBody = effectHtml(u.effect);
+            const cFoot = xpFracHtml(spendableXp, xp);   // per-node cost (frontier nodes unlock independently)
+            // Title + buffs as one unit (no divider between them); divider before cost.
+            tip.innerHTML = joinSections([cHead + cBody, cFoot]);
             chip.appendChild(tip);
             nextEl.appendChild(chip);
             chips.push({ el: chip, tip: tip, cmd: "unlockFieldMod", arg: u.actionId });
@@ -321,9 +382,11 @@ function renderNextAvailable(nextEl, arr, hotEl) {
 
 // Signature of the available-upgrade set, so render() can skip rebuilding identical
 // chips (a rebuild destroys the hovered chip's tooltip element).
-function upgradesSig(arr) {
+function upgradesSig(arr, spendableXp) {
     const n = arrLen(arr);
-    let s = n + ":";
+    // spendableXp is folded in so the chips rebuild when affordability flips; it's
+    // stable between unlock actions, so this doesn't cause per-push rebuild flicker.
+    let s = n + "@" + (spendableXp | 0) + ":";
     for (let i = 0; i < n; i++) {
         const u = unwrap(arr[i] !== undefined ? arr[i] : arr.get && arr.get(i));
         if (u) s += (u.actionId | 0) + "," + (u.xpRequired | 0) + ";";
@@ -486,6 +549,8 @@ function render(model) {
     xpEl.style.display = "flex";
 
     const mode = data.mode;
+    // Spendable XP (vehicle + free), the affordability yardstick for tooltips.
+    const spendableXp = data.spendableXp | 0;
     const sMin = data.scaleMin || 0;
     const sMax = data.scaleMax || 0;
     const fv = data.fillVehicle || 0;
@@ -533,11 +598,11 @@ function render(model) {
     const onlyFinal = mode === "skill_tree" && stTotal > 0 &&
         stDone === stTotal - 1 && arrLen(data.availUpgrades) >= 1;
     if (mode === "skill_tree" && nextEl && !onlyFinal) {
-        const sig = upgradesSig(data.availUpgrades);
+        const sig = upgradesSig(data.availUpgrades, spendableXp);
         if (nextEl._wgSig !== sig) {
             nextEl._wgSig = sig;
             setActiveChip(hotEl, null);
-            renderNextAvailable(nextEl, data.availUpgrades, hotEl);
+            renderNextAvailable(nextEl, data.availUpgrades, hotEl, spendableXp);
         } else {
             nextEl.style.display = "flex";   // unchanged -> keep chips + tooltip, re-show
         }
@@ -627,7 +692,7 @@ function render(model) {
         // Skill-tree count ticks carry no metadata, but the FINAL tick has a name
         // (+ cost) -> give it a hover tooltip too. Other modes: all ticks tip.
         if (!noTips || t.name) {
-            const body = tooltipHtml(t);
+            const body = tooltipHtml(t, spendableXp);
             // Tag the tick (and, via ancestry, its glyph) so the handler can read
             // the exact tick under the cursor when Gameface deep-targets; also keep
             // a flat list for the nearest-by-x fallback when it doesn't.
@@ -710,22 +775,21 @@ function render(model) {
 
 // Tooltip body for an elite mark: the grade/reward name, (rewards) the reward
 // type, and the elite level the mark sits at.
-function eliteTooltipHtml(t, isRewards) {
-    let html = "";
+function eliteTooltipHtml(t, isRewards, combatXp) {
     const name = t.name || (isRewards ? "Reward" : "");
-    if (name) html += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
-    // XP "cost": the cumulative combat XP needed to reach this elite level --
-    // makes the level number meaningful. Shown in the currency-tan XP style.
-    const xp = t.xpRequired | 0;
-    if (xp > 0) html += '<div class="wg-tip-xp">' + fmtXp(xp) + " XP</div>";
-    // status line: "<reward type> · " (rewards only) + the elite level.
-    let status = "Elite Level " + (t.position | 0);
+    // Category caption at the TOP (like native tooltips put the kind line above the
+    // title): the reward TYPE (rewards) and/or the elite level the mark sits at.
+    let caption = "Elite Level " + (t.position | 0);
     if (isRewards) {
         const opts = (t.options || "").split("\n").filter(function (s) { return s; });
-        if (opts.length) status = escapeHtml(opts[0]) + " · " + status;
+        if (opts.length) caption = escapeHtml(opts[0]) + " · " + caption;
     }
-    html += '<div class="wg-tip-status">' + status + "</div>";
-    return html;
+    let head = '<div class="wg-tip-caption">' + caption + "</div>";
+    if (name) head += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
+    // Footer: progress to this milestone as "<earned> / <needed> combat XP" (the
+    // tick's xpRequired is the cumulative combat XP to reach the level).
+    const foot = xpFracHtml(combatXp, t.xpRequired);
+    return joinSections([head, foot]);
 }
 
 // Render the ELITE (grade band) / ELITE_REWARDS (reward roadmap) views. Reuses
@@ -795,7 +859,7 @@ function renderElite(root, data, isRewards) {
         mark.className = "wg-tick wg-elite-tick wg-state-" + state;
         const leftPct = pct(t.position);
         mark.style.left = leftPct + "%";
-        const body = eliteTooltipHtml(t, isRewards);
+        const body = eliteTooltipHtml(t, isRewards, data.combatXp | 0);
         mark._wgBody = body;
         mark._wgLeft = leftPct;
         tickMeta.push({ left: leftPct, body: body });

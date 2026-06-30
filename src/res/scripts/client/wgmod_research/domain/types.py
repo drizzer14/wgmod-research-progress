@@ -30,7 +30,8 @@ class Mode(object):
 class Tick(object):
     def __init__(self, xp_position, category, icon, name,
                  xp_gained, xp_required, affordable, completed, locked=False,
-                 level=0, options=None, state="", action_id=0):
+                 level=0, options=None, state="", action_id=0,
+                 kind_label="", prereq_names=None, effect="", option_effects=None):
         self.xp_position = xp_position
         # vehicle | module (tech-tree unlock kind) | fieldmod. Drives the
         # per-tick glyph in the view (a bar is all-tech-tree or all-field-mods,
@@ -62,11 +63,27 @@ class Tick(object):
         # 'fieldmod'). 0 for ticks that aren't individually actionable
         # (skill-tree nodes, elite/reward marks).
         self.action_id = action_id
+        # Tech-tree only: a short "kind" caption for the tooltip -- the module type
+        # ("Gun"/"Turret"/"Engine"/"Chassis"/"Radio") or, for a next-vehicle
+        # unlock, its tier ("Tier IX"). Empty for non-tech-tree ticks.
+        self.kind_label = kind_label
+        # Tech-tree only: names of the still-unresearched prerequisite items
+        # blocking a locked unlock -> shown as "Requires: ..." in the tooltip.
+        # Empty for unlocked / non-tech-tree ticks.
+        self.prereq_names = prereq_names or []
+        # Human-readable effect/bonus lines for the tooltip (field-mod KPI text,
+        # e.g. "+1% to concealment"), newline-joined for multiple KPIs. Empty when
+        # the action carries no labeled KPI (features, role slots, mechanic perks).
+        self.effect = effect
+        # Per-variant effect summaries for an A/B choice level, aligned with
+        # `options` by index (each variant's buffs joined inline). Empty otherwise.
+        self.option_effects = option_effects or []
 
 
 class UnlockItem(object):
     """A tech-tree unlock (module or next vehicle, including a Tier XI vehicle)."""
-    def __init__(self, int_cd, name, icon, xp_cost, kind, researched, prereqs_met):
+    def __init__(self, int_cd, name, icon, xp_cost, kind, researched, prereqs_met,
+                 kind_label="", prereq_names=None):
         self.int_cd = int_cd
         self.name = name
         self.icon = icon
@@ -74,12 +91,18 @@ class UnlockItem(object):
         self.kind = kind                  # 'module' | 'vehicle'
         self.researched = researched
         self.prereqs_met = prereqs_met
+        # Display caption for the tooltip: module type ("Gun"/"Turret"/...) or the
+        # next vehicle's tier ("Tier IX"). Empty if it couldn't be determined.
+        self.kind_label = kind_label
+        # Names of the still-unresearched prerequisite items (when prereqs_met is
+        # False) -> the tooltip's "Requires: ..." line. Empty otherwise.
+        self.prereq_names = prereq_names or []
 
 
 class ProgressionStep(object):
     """A field-modification step (post-progression tree node, paid with XP)."""
     def __init__(self, step_id, name, icon, xp_cost, unlocked, level=0,
-                 options=None):
+                 options=None, description="", option_effects=None):
         self.step_id = step_id
         self.name = name
         self.icon = icon
@@ -88,6 +111,13 @@ class ProgressionStep(object):
         self.level = level                # field-mod level (1..N) -> roman numeral
         # variant names of the paired choice (MultiModsItem) at this level.
         self.options = options or []
+        # Human-readable effect/bonus text (KPI lines, newline-joined), e.g.
+        # "+1% to concealment". Empty when the action exposes no labeled KPI.
+        self.description = description
+        # Per-variant effect summaries, aligned with `options` by index: each is
+        # that variant's own buffs joined inline (" · "). Empty for non-choice
+        # steps. e.g. ["+5% to aiming speed · +3% to aiming circle size", ...].
+        self.option_effects = option_effects or []
 
 
 class EliteGrade(object):
@@ -132,7 +162,8 @@ class VehicleSnapshot(object):
                  is_skill_tree=False, skilltree_total_xp=0,
                  skilltree_spent_xp=0, skilltree_done=0, skilltree_total=0,
                  skilltree_final_icon="", skilltree_final_name="",
-                 skilltree_final_xp=0, skilltree_available=None):
+                 skilltree_final_xp=0, skilltree_available=None,
+                 skilltree_final_effect=""):
         self.tier = tier                          # 1..11
         self.is_elite = is_elite                  # True = fully researched
         self.vehicle_xp = vehicle_xp              # unspent accumulated vehicle XP
@@ -170,6 +201,7 @@ class VehicleSnapshot(object):
         self.skilltree_final_icon = skilltree_final_icon  # img:// art of the 'final' node (end tick)
         self.skilltree_final_name = skilltree_final_name  # final node name (end-tick tooltip)
         self.skilltree_final_xp = skilltree_final_xp      # final node XP cost (end-tick tooltip)
+        self.skilltree_final_effect = skilltree_final_effect  # final node buff text (end-tick tooltip)
         # Available frontier upgrade nodes (not received, prerequisites met) ->
         # the clickable "Upgrades Available:" chips. [ProgressionStep] (step_id,
         # name, icon, xp_cost). Empty for non-skill-tree vehicles.
@@ -183,12 +215,18 @@ class ResearchProgressModel(object):
                  fill_vehicle, fill_free, ticks,
                  fieldmods_done=0, fieldmods_total=0, vehicle_class="",
                  elite_level=0, elite_max_level=0, elite_grade="", elite_sub=0,
-                 combat_xp=0, avail_upgrades=None):
+                 combat_xp=0, avail_upgrades=None, spendable_xp=0):
         self.mode = mode
         self.scale_min = scale_min
         self.scale_max = scale_max
         self.fill_vehicle = fill_vehicle       # first stacked segment (vehicle XP)
         self.fill_free = fill_free             # second stacked segment (free XP)
+        # Total spendable XP (vehicle combat XP + global free XP), the same figure
+        # the header readout shows. Surfaced as one model field (not per-tick, since
+        # it's identical for every tick) so the view can compute per-item
+        # affordability in EVERY mode -- including skill_tree, whose fill is a node
+        # COUNT rather than an XP value.
+        self.spendable_xp = spendable_xp
         self.ticks = ticks                     # [Tick], ordered by xp_position
         self.fieldmods_done = fieldmods_done   # researched/total field-mod levels
         self.fieldmods_total = fieldmods_total

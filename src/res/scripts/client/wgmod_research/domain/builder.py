@@ -40,6 +40,9 @@ def bar_visible(overlay_closed, hide_always, hide_when_complete, mode):
 def build_model(snapshot):
     fill_vehicle = snapshot.vehicle_xp
     fill_free = snapshot.free_xp
+    # Total spendable XP, set on every model below so the view can show per-item
+    # affordability in any mode (skill_tree fill is a node count, not XP).
+    spendable = fill_vehicle + fill_free
     fm_done = snapshot.fieldmods_done
     fm_total = snapshot.fieldmods_total
     veh_class = snapshot.vehicle_class
@@ -57,7 +60,7 @@ def build_model(snapshot):
         return t.ResearchProgressModel(
             mode=t.Mode.TECH_TREE, scale_min=0, scale_max=_max_pos(ticks, 0),
             fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=ticks,
-            vehicle_class=veh_class)
+            vehicle_class=veh_class, spendable_xp=spendable)
 
     # Tier-XI "vehicle skill tree" upgrade: a branching post-progression tree, so
     # the linear FIELD_MODS reader doesn't apply. The tree is non-linear, so the bar
@@ -74,7 +77,7 @@ def build_model(snapshot):
                 scale_max=st["scale_max"], fill_vehicle=st["fill"],
                 fill_free=0, ticks=st["ticks"],
                 fieldmods_done=st["done"], fieldmods_total=st["total"],
-                vehicle_class=veh_class,
+                vehicle_class=veh_class, spendable_xp=spendable,
                 avail_upgrades=st.get("avail_upgrades", []))
 
     # Nothing left to research: show remaining Field Modifications, plus the
@@ -84,7 +87,8 @@ def build_model(snapshot):
         return t.ResearchProgressModel(
             mode=t.Mode.FIELD_MODS, scale_min=0, scale_max=_max_pos(fm_ticks, 0),
             fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=fm_ticks,
-            fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class)
+            fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class,
+            spendable_xp=spendable)
 
     # Fully researched. If the vehicle has Elite-Levels (prestige) data, show
     # the prestige progression instead of the static "fully researched" badge.
@@ -102,17 +106,31 @@ def build_model(snapshot):
     return t.ResearchProgressModel(
         mode=t.Mode.COMPLETE, scale_min=0, scale_max=0,
         fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=[],
-        fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class)
+        fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class,
+        spendable_xp=spendable)
 
 
 def _elite_model(mode, res, snapshot):
     """Build an ELITE / ELITE_REWARDS model from a resolver result dict. The
     band uses a single fill segment (vehicle slot) so fill_free stays 0; the
     readout is cumulative combat XP."""
+    # The prestige/Elite-Levels system tracks the vehicle's CUMULATIVE combat XP
+    # (total earned toward Elite Levels), NOT the unspent research XP (vehicle_xp).
+    # Reconstruct it from the snapshot: cumulative XP to reach the current level
+    # (elite_level_xp[level]) + progress within that level (elite_current_xp). The
+    # latter uses -1 as a "no data" sentinel, so floor it at 0. This feeds both the
+    # header readout and the per-tick "<have> / <need> XP" tooltip, whose need is
+    # the cumulative combat XP to reach each grade.
+    level_xp = snapshot.elite_level_xp or {}
+    progress = snapshot.elite_current_xp or 0
+    if progress < 0:
+        progress = 0
+    combat = int(level_xp.get(snapshot.elite_level, 0) or 0) + progress
     return t.ResearchProgressModel(
         mode=mode, scale_min=res["scale_min"], scale_max=res["scale_max"],
         fill_vehicle=res["fill"], fill_free=0, ticks=res["ticks"],
         vehicle_class=snapshot.vehicle_class,
         elite_level=res["level"], elite_max_level=res["max_level"],
         elite_grade=res.get("grade", ""), elite_sub=res.get("sub", 0),
-        combat_xp=snapshot.vehicle_xp)
+        combat_xp=combat,
+        spendable_xp=snapshot.vehicle_xp + snapshot.free_xp)

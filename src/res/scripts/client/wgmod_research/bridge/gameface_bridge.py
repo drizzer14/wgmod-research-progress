@@ -278,7 +278,7 @@ def _connect_commands(rvm):
 
 
 class TickVM(ViewModel):
-    def __init__(self, properties=11, commands=0):
+    def __init__(self, properties=15, commands=0):
         super(TickVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -294,6 +294,10 @@ class TickVM(ViewModel):
         self._addStringProperty("options", "")   # 8 (pair variants, \n-joined)
         self._addStringProperty("state", "")     # 9 (elite mark: achieved/next/upcoming)
         self._addNumberProperty("actionId", 0)   # 10 (tech-tree int_cd / field-mod step_id; 0 = not clickable)
+        self._addStringProperty("kindLabel", "")  # 11 (tech-tree: "Gun"/"Tier IX" caption)
+        self._addStringProperty("prereqNames", "")  # 12 (locked tech-tree: blockers, \n-joined)
+        self._addStringProperty("effect", "")     # 13 (field-mod KPI bonus lines, \n-joined)
+        self._addStringProperty("optionEffects", "")  # 14 (per-variant buffs, \n-joined, aligned w/ options)
 
     def setPosition(self, v):
         self._setNumber(0, v)
@@ -328,10 +332,22 @@ class TickVM(ViewModel):
     def setActionId(self, v):
         self._setNumber(10, v)
 
+    def setKindLabel(self, v):
+        self._setString(11, v)
+
+    def setPrereqNames(self, v):
+        self._setString(12, v)
+
+    def setEffect(self, v):
+        self._setString(13, v)
+
+    def setOptionEffects(self, v):
+        self._setString(14, v)
+
 
 class UpgradeVM(ViewModel):
     """One available tier-XI upgrade node -> a clickable 'Upgrades Available' chip."""
-    def __init__(self, properties=4, commands=0):
+    def __init__(self, properties=5, commands=0):
         super(UpgradeVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -340,6 +356,7 @@ class UpgradeVM(ViewModel):
         self._addStringProperty("icon", "")        # 1 (img:// URL)
         self._addStringProperty("name", "")        # 2
         self._addNumberProperty("xpRequired", 0)   # 3
+        self._addStringProperty("effect", "")      # 4 (perk KPI bonus lines, \n-joined)
 
     def setActionId(self, v):
         self._setNumber(0, v)
@@ -353,9 +370,12 @@ class UpgradeVM(ViewModel):
     def setXpRequired(self, v):
         self._setNumber(3, v)
 
+    def setEffect(self, v):
+        self._setString(4, v)
+
 
 class ResearchVM(ViewModel):
-    def __init__(self, properties=16, commands=3):
+    def __init__(self, properties=17, commands=3):
         super(ResearchVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -376,6 +396,7 @@ class ResearchVM(ViewModel):
         self._addNumberProperty("combatXp", 0)       # 13 (cumulative combat XP)
         self._addBoolProperty("visible", True)        # 14 (false hides the bar)
         self._addArrayProperty("availUpgrades", Array())  # 15 ([UpgradeVM] -> chips)
+        self._addNumberProperty("spendableXp", 0)    # 16 (vehicle XP + free XP, for affordability)
         # Reverse channel: JS click handlers invoke these commands. Each returns a
         # command object that connect_commands() wires to a Python handler. Wulf
         # delivers the JS-supplied argument(s) to those handlers.
@@ -430,6 +451,9 @@ class ResearchVM(ViewModel):
 
     def getAvailUpgrades(self):
         return self._getArray(15)
+
+    def setSpendableXp(self, v):
+        self._setNumber(16, v)
 
     @staticmethod
     def getTicksType():
@@ -499,6 +523,7 @@ def push(rvm, host_vm=None):
             tx.setEliteGrade(model.elite_grade or "")
             tx.setEliteSub(model.elite_sub or 0)
             tx.setCombatXp(model.combat_xp or 0)
+            tx.setSpendableXp(model.spendable_xp or 0)
             arr = tx.getTicks()
             arr.clear()
             for t in model.ticks:
@@ -514,6 +539,10 @@ def push(rvm, host_vm=None):
                 tv.setOptions("\n".join(t.options or []))
                 tv.setState(t.state or "")
                 tv.setActionId(t.action_id or 0)
+                tv.setKindLabel(getattr(t, "kind_label", "") or "")
+                tv.setPrereqNames("\n".join(getattr(t, "prereq_names", None) or []))
+                tv.setEffect(getattr(t, "effect", "") or "")
+                tv.setOptionEffects("\n".join(getattr(t, "option_effects", None) or []))
                 arr.addViewModel(tv)
             arr.invalidate()
             # Available tier-XI upgrade nodes -> the clickable header chips.
@@ -525,6 +554,7 @@ def push(rvm, host_vm=None):
                 uv.setIcon(getattr(up, "icon", "") or "")
                 uv.setName(getattr(up, "name", "") or "")
                 uv.setXpRequired(getattr(up, "xp_cost", 0) or 0)
+                uv.setEffect(getattr(up, "description", "") or "")
                 ua.addViewModel(uv)
             ua.invalidate()
         # Nudge the host sub-view so its data re-syncs to JS (nested-model

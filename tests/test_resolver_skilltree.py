@@ -4,12 +4,21 @@ from wgmod_research.domain.resolvers import skilltree
 
 
 def _snap(is_skill_tree=True, total_xp=325000, spent_xp=130000, done=10,
-          total=26, vehicle_xp=40000, free_xp=5000, final_icon="img://final.png"):
+          total=26, vehicle_xp=40000, free_xp=5000, final_icon="img://final.png",
+          final_effect=""):
     return t.VehicleSnapshot(
         tier=10, is_elite=True, vehicle_xp=vehicle_xp, free_xp=free_xp,
         is_skill_tree=is_skill_tree, skilltree_total_xp=total_xp,
         skilltree_spent_xp=spent_xp, skilltree_done=done, skilltree_total=total,
-        skilltree_final_icon=final_icon)
+        skilltree_final_icon=final_icon, skilltree_final_effect=final_effect)
+
+
+def test_final_tick_carries_effect_text():
+    res = skilltree.resolve(_snap(done=10, total=26,
+                                  final_effect="Reduces gun reload time by 5%."))
+    ticks = res["ticks"]
+    assert ticks[-1].effect == "Reduces gun reload time by 5%."   # final tick
+    assert ticks[0].effect == ""                                   # plain count ticks
 
 
 def test_not_skill_tree_returns_none():
@@ -24,6 +33,20 @@ def test_no_priced_nodes_returns_none():
 def test_fully_upgraded_returns_none():
     # Every node unlocked -> let the builder fall through to ELITE / COMPLETE.
     assert skilltree.resolve(_snap(done=26, total=26)) is None
+
+
+def test_available_upgrades_preserve_effect_description():
+    # Frontier nodes (the clickable chips) ride through as ProgressionStep, carrying
+    # their effect text for the chip tooltip.
+    avail = [t.ProgressionStep(step_id=7, name="Concealment After Firing",
+                               icon="img://p.png", xp_cost=10000, unlocked=False,
+                               description="+10% to concealment after firing")]
+    snap = _snap(done=10, total=26)
+    snap.skilltree_available = avail
+    res = skilltree.resolve(snap)
+    ups = res["avail_upgrades"]
+    assert len(ups) == 1
+    assert ups[0].description == "+10% to concealment after firing"
 
 
 def test_count_based_scale_and_fill():

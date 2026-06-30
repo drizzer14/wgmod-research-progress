@@ -3,10 +3,12 @@ from wgmod_research.domain import types as t
 from wgmod_research.domain.resolvers import techtree
 
 
-def _unlock(cd, cost, researched=False, prereqs_met=True, kind="module"):
+def _unlock(cd, cost, researched=False, prereqs_met=True, kind="module",
+            kind_label="", prereq_names=None):
     return t.UnlockItem(int_cd=cd, name="i%d" % cd, icon="i%d.png" % cd,
                         xp_cost=cost, kind=kind,
-                        researched=researched, prereqs_met=prereqs_met)
+                        researched=researched, prereqs_met=prereqs_met,
+                        kind_label=kind_label, prereq_names=prereq_names)
 
 
 def test_skips_researched_and_orders_cumulatively():
@@ -49,3 +51,16 @@ def test_locked_reflects_prereqs_met():
     ticks = techtree.resolve(snap)
     # ordered by cost: 600 (prereqs met -> not locked), 2000 (unmet -> locked)
     assert [tk.locked for tk in ticks] == [False, True]
+
+
+def test_kind_label_and_prereq_names_pass_through_to_ticks():
+    snap = t.VehicleSnapshot(
+        tier=10, is_elite=False, vehicle_xp=0, free_xp=0,
+        tech_unlocks=[
+            _unlock(1, 600, kind="module", kind_label="Gun"),
+            _unlock(2, 2000, kind="vehicle", kind_label="Tier IX",
+                    prereqs_met=False, prereq_names=["Some Engine", "Some Turret"])])
+    ticks = techtree.resolve(snap)  # ordered by cost: module (600), vehicle (2000)
+    assert [tk.kind_label for tk in ticks] == ["Gun", "Tier IX"]
+    assert ticks[0].prereq_names == []
+    assert ticks[1].prereq_names == ["Some Engine", "Some Turret"]
