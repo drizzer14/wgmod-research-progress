@@ -42,6 +42,7 @@ def _install():
             # installer is idempotent and this keeps it working across hot reloads.
             bridge.install_vehicle_listener()
             bridge.install_loadout_listener()
+            bridge.install_lobby_state_listener()
             bridge.install_stats_listener()
             rvm = bridge.attach(self.getViewModel())
             bridge.push(rvm, host_vm=self.getViewModel())
@@ -55,6 +56,7 @@ def _install():
     # _onLoading re-arms on every subsequent mount.
     bridge.install_vehicle_listener()
     bridge.install_loadout_listener()
+    bridge.install_lobby_state_listener()
     bridge.install_stats_listener()
     LOG_NOTE("[%s] v%s installed (sub-view inject + data)" % (MOD_NAME, MOD_VERSION))
 

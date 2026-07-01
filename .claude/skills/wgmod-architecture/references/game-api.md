@@ -27,6 +27,18 @@ that skill).
 - `skeletons.gui.shared.IItemsCache` — `.onSyncCompleted(updateReason, invalidItems)`
   event (long-lived singleton); reason strings `shop`/`clan` are ignored, all else
   refreshes (fail-open).
+- **Lobby view detection** (hide the bar outside the plain garage):
+  `gui.Scaleform.lobby_entry.getLobbyStateMachine()` → the lobby state machine (or
+  `None`). `.visibleState.getStateID()` is the deepest entered leaf's hierarchical
+  `parent/child` path. The plain garage is the DefaultHangarState, ending in
+  **`hangar/{root}`** (verified live: `subScope/subLayer/hangar/{root}`). `{root}` is
+  defined exactly once client-wide (the sole default child of the hangar state,
+  `gui/impl/lobby/hangar/base/proto_states.py:335`), so it uniquely IDs the plain garage.
+  NB the `allVehicles` leaf (`_AllVehiclesStatePrototype`, title "allVehicles") is the
+  separate full-screen All-Vehicles BROWSER, NOT the plain garage. Playlists leaf is
+  `editVehiclePlaylists`; loadout overlays are leaves under `loadout/*`.
+  `.onVisibleRouteChanged` is the change Event (subscribe like `.onInteractorUpdated`;
+  re-arm each mount). The bar's garage check is FAIL-CLOSED (unreadable → hide).
 
 ## Reads (`adapter/engine_adapter.py`)
 - `CurrentVehicle.g_currentVehicle` — `.isPresent()`, `.item` (the selected vehicle).

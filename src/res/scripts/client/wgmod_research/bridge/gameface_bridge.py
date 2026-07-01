@@ -44,6 +44,11 @@ _listener = None
 # rationale as the vehicle listener above.
 _loadout_listener = None
 
+# Our handler for lobby view changes (garage <-> playlists / other views). Same
+# strong-ref + self-healing rationale; lets us hide the bar when the vehicle-params
+# sub-view stays mounted on a non-garage view (e.g. the playlists screen).
+_lobby_state_listener = None
+
 # Our handler for items-cache syncs (free-XP conversion, research/field-mod
 # purchases, post-battle XP, prestige changes -- everything that mutates the XP
 # state without a vehicle re-selection). Same strong-ref rationale as above. The
@@ -76,6 +81,16 @@ def _on_vehicle_changed(*args, **kwargs):
 def _on_interactor_updated(*args, **kwargs):
     # The loadout interactor was set (tank-setup / ammo overlay opened) or cleared
     # (back to the plain garage). Re-push so the bar hides / shows accordingly.
+    try:
+        refresh()
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+
+
+def _on_lobby_state_changed(*args, **kwargs):
+    # The visible lobby view changed (garage <-> playlists / other views). A view
+    # change does not necessarily re-mount the sub-view, so re-push here so the bar
+    # hides when we leave the plain garage and shows again when we return.
     try:
         refresh()
     except Exception:
@@ -151,6 +166,36 @@ def _bar_visible():
         return True
 
 
+def _in_garage():
+    """True only when the plain garage view is the visible lobby state. The
+    vehicle-params sub-view we inject into stays mounted on other lobby views
+    (notably the playlists / battle-type selection screen), so the bar must be
+    hidden explicitly there. The lobby state machine's visible leaf state carries
+    a hierarchical id; the plain garage is the DefaultHangarState, whose id ends in
+    'hangar/{root}' (verified live: 'subScope/subLayer/hangar/{root}'). '{root}' is
+    defined exactly once in the client -- the sole default child of the hangar
+    state -- so this uniquely identifies the plain garage and excludes the full
+    'All Vehicles' browser ('.../hangar/allVehicles'), the playlists screen
+    ('.../editVehiclePlaylists'), and every other view.
+
+    Guarded -> False (FAIL CLOSED: show ONLY in the confirmed garage) if the state
+    machine is missing or unreadable. This is the opposite default from
+    _bar_visible() by design -- a positive garage confirmation is required."""
+    try:
+        from gui.Scaleform.lobby_entry import getLobbyStateMachine
+        machine = getLobbyStateMachine()
+        if machine is None:
+            return False
+        state = machine.visibleState
+        if state is None:
+            return False
+        state_id = state.getStateID() or ""
+        return state_id.endswith("hangar/{root}")
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+        return False
+
+
 def install_vehicle_listener():
     """Ensure our handler is subscribed to vehicle-selection changes.
 
@@ -183,6 +228,25 @@ def install_loadout_listener():
         if _loadout_listener not in ctrl.onInteractorUpdated:
             ctrl.onInteractorUpdated += _loadout_listener
             LOG_NOTE("[wgmod] loadout listener (re)armed")
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+
+
+def install_lobby_state_listener():
+    """Ensure our handler is subscribed to lobby view changes, so the bar hides
+    when we leave the plain garage (e.g. the playlists screen) and shows again on
+    return. Self-healing and idempotent, same as install_loadout_listener -- safe
+    to call on every mount. Guarded: if the state machine isn't available yet the
+    subscribe is skipped and retried on the next mount."""
+    global _lobby_state_listener
+    if _lobby_state_listener is None:
+        _lobby_state_listener = _on_lobby_state_changed
+    try:
+        from gui.Scaleform.lobby_entry import getLobbyStateMachine
+        machine = getLobbyStateMachine()
+        if machine is not None and _lobby_state_listener not in machine.onVisibleRouteChanged:
+            machine.onVisibleRouteChanged += _lobby_state_listener
+            LOG_NOTE("[wgmod] lobby state listener (re)armed")
     except Exception:
         LOG_CURRENT_EXCEPTION()
 
@@ -509,7 +573,8 @@ def push(rvm, host_vm=None):
             model.mode, len(model.ticks), model.fill_vehicle, model.fill_free))
         with rvm.transaction() as tx:
             tx.setVisible(bar_visible(_bar_visible(), mod_settings.hide_always(),
-                                      mod_settings.hide_when_complete(), model.mode))
+                                      mod_settings.hide_when_complete(), model.mode,
+                                      _in_garage()))
             tx.setMode(model.mode)
             tx.setScaleMin(model.scale_min)
             tx.setScaleMax(model.scale_max)

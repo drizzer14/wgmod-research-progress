@@ -22,15 +22,20 @@ def _max_pos(ticks, default):
     return max([tk.xp_position for tk in ticks]) if ticks else default
 
 
-def bar_visible(overlay_closed, hide_always, hide_when_complete, mode):
+def bar_visible(overlay_closed, hide_always, hide_when_complete, mode, in_garage):
     """Whether the bar should render, combining the engine state (a tank-setup
-    overlay open -> overlay_closed is False) with the two user settings. Pure and
-    engine-free so it unit-tests on plain inputs.
+    overlay open -> overlay_closed is False; the plain garage is mounted ->
+    in_garage is True) with the two user settings. Pure and engine-free so it
+    unit-tests on plain inputs.
 
     - hide_always: master switch -> never show.
+    - in_garage: show ONLY in the plain garage view (fail-closed allowlist -- any
+      other lobby view, or an unreadable view signal, hides the bar).
     - hide_when_complete: hide only on fully-progressed vehicles (Mode.COMPLETE).
     - otherwise follow the overlay state (hidden while a setup overlay is open)."""
     if hide_always:
+        return False
+    if not in_garage:
         return False
     if hide_when_complete and mode == t.Mode.COMPLETE:
         return False
