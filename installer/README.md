@@ -29,6 +29,25 @@ The installer refuses to run while `WorldOfTanks.exe` is open (file locks). On
 uninstall it removes the mod but **leaves OpenWG and ModsSettingsAPI in place**
 (other mods may use them).
 
+## Update check
+
+After you confirm the WoT folder, the installer makes one best-effort call to the
+GitHub releases Atom feed
+(`https://github.com/drizzer14/garage-research-progress/releases.atom`) and compares
+the latest published version against the higher of *this installer's bundled version*
+and *any already-installed mod build* under `mods\<version>\`. If GitHub has a newer
+release, it offers to **download and launch that installer** for you, then closes
+itself so you continue with the current version.
+
+It's entirely best-effort: no internet, a changed feed, or a failed download all fall
+back silently to installing the bundled version. Pass **`/SKIPUPDATECHECK`** on the
+command line to skip the check (useful offline or for testing).
+
+The self-update relies on the release-asset filename convention
+`GarageProgressBar-Setup-<version>.exe` (driven by `SetupBaseName` +
+`OutputBaseFilename` in `wgmod-setup.iss`) — **don't rename the setup asset** without
+updating that define, or the updater won't find the new build.
+
 ## Bundled dependencies
 
 `vendor/net.openwg.gameface_1.1.6.wotmod` is the official OpenWG GameFace build

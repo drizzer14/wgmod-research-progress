@@ -12,11 +12,16 @@
 ; Build:  see installer\build_installer.ps1  (needs Inno Setup's ISCC + the mod
 ;         .wotmod already built into ..\dist by build\build_wotmod.py).
 
-#define ModId        "com.14th_ua.garageprogressbar"
-#define ModVersion   "0.2.0"
-#define ModWotmod    "com.14th_ua.garageprogressbar_0.2.0.wotmod"
-#define OpenWgWotmod "net.openwg.gameface_1.1.6.wotmod"
-#define MsaWotmod    "izeberg.modssettingsapi_1.7.0.wotmod"
+#define ModId         "com.14th_ua.garageprogressbar"
+#define ModVersion    "0.2.0"
+#define ModWotmod     "com.14th_ua.garageprogressbar_0.2.0.wotmod"
+#define OpenWgWotmod  "net.openwg.gameface_1.1.6.wotmod"
+#define MsaWotmod     "izeberg.modssettingsapi_1.7.0.wotmod"
+; Used by the GitHub update check (see [Code]): the Atom feed + release-asset URLs
+; are built from these, and SetupBaseName must match this .exe's filename convention.
+#define RepoOwner     "drizzer14"
+#define RepoName      "garage-research-progress"
+#define SetupBaseName "GarageProgressBar-Setup"
 
 [Setup]
 AppId={{8B6A1C3E-9D42-4F7A-BE1C-0D2F7C4A9E51}
@@ -31,7 +36,7 @@ DirExistsWarning=no
 AppendDefaultDirName=no
 UsePreviousAppDir=no
 OutputDir=..\dist
-OutputBaseFilename=GarageProgressBar-Setup-{#ModVersion}
+OutputBaseFilename={#SetupBaseName}-{#ModVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -57,7 +62,10 @@ SelectDirBrowseLabel=Confirm your World of Tanks installation folder (the one co
 
 [Code]
 var
-  GVersion: string;   { resolved game version, e.g. 2.3.0.1 }
+  GVersion: string;         { resolved game version, e.g. 2.3.0.1 }
+  GUpdateChecked: Boolean;   { the GitHub update check has run once this session }
+  GRelaunching: Boolean;     { a newer installer was launched; suppress cancel prompt }
+  DownloadPage: TDownloadWizardPage;
 
 { ---- helpers ------------------------------------------------------------- }
 
@@ -274,7 +282,208 @@ begin
   end;
 end;
 
+{ ---- GitHub update check ------------------------------------------------- }
+
+{ Case-insensitive test for a command-line switch (e.g. /SKIPUPDATECHECK). }
+function HasCmdParam(const P: string): Boolean;
+var
+  i: Integer;
+begin
+  Result := False;
+  for i := 1 to ParamCount do
+    if CompareText(ParamStr(i), P) = 0 then
+    begin
+      Result := True;
+      Exit;
+    end;
+end;
+
+{ Pull the newest release tag from a GitHub releases.atom feed -> "0.3.0".
+  The first /releases/tag/ link in the feed is the latest release. }
+function ParseAtomTag(S: AnsiString): string;
+var
+  p, i: Integer;
+  v: string;
+begin
+  Result := '';
+  p := Pos('/releases/tag/', S);
+  if p = 0 then
+    Exit;
+  i := p + Length('/releases/tag/');
+  if (i <= Length(S)) and ((S[i] = 'v') or (S[i] = 'V')) then
+    Inc(i);
+  v := '';
+  while (i <= Length(S)) and (((S[i] >= '0') and (S[i] <= '9')) or (S[i] = '.')) do
+  begin
+    v := v + S[i];
+    Inc(i);
+  end;
+  while (Length(v) > 0) and (v[Length(v)] = '.') do
+    v := Copy(v, 1, Length(v) - 1);
+  Result := v;
+end;
+
+{ Compare dotted numeric versions component-wise. -1 if A<B, 0 equal, 1 if A>B.
+  Length-tolerant: missing components count as 0 (so 0.3 = 0.3.0). }
+function VerCompare(A, B: string): Integer;
+var
+  sa, sb: string;
+  pa, pb, na, nb: Integer;
+begin
+  Result := 0;
+  while ((A <> '') or (B <> '')) and (Result = 0) do
+  begin
+    pa := Pos('.', A);
+    if pa > 0 then begin sa := Copy(A, 1, pa - 1); A := Copy(A, pa + 1, Length(A)); end
+    else begin sa := A; A := ''; end;
+    pb := Pos('.', B);
+    if pb > 0 then begin sb := Copy(B, 1, pb - 1); B := Copy(B, pb + 1, Length(B)); end
+    else begin sb := B; B := ''; end;
+    na := StrToIntDef(sa, 0);
+    nb := StrToIntDef(sb, 0);
+    if na < nb then Result := -1
+    else if na > nb then Result := 1;
+  end;
+end;
+
+{ Version parsed from "com.14th_ua.garageprogressbar_<ver>.wotmod".
+  The id itself contains an underscore (14th_ua), so split on the LAST one. }
+function ExtractModVer(FileName: string): string;
+var
+  i, u, p: Integer;
+  s: string;
+begin
+  u := 0;
+  for i := 1 to Length(FileName) do
+    if FileName[i] = '_' then
+      u := i;
+  s := Copy(FileName, u + 1, Length(FileName));
+  p := Pos('.wotmod', s);
+  if p > 0 then
+    s := Copy(s, 1, p - 1);
+  Result := s;
+end;
+
+{ Highest installed version of THIS mod under Dir, or '' if none present. }
+function ReadInstalledModVer(Dir: string): string;
+var
+  FR: TFindRec;
+  v: string;
+begin
+  Result := '';
+  if FindFirst(Dir + '\{#ModId}_*.wotmod', FR) then
+  begin
+    try
+      repeat
+        v := ExtractModVer(FR.Name);
+        if (v <> '') and ((Result = '') or (VerCompare(v, Result) > 0)) then
+          Result := v;
+      until not FindNext(FR);
+    finally
+      FindClose(FR);
+    end;
+  end;
+end;
+
+{ Best-effort latest release version from the repo's Atom feed, or '' on failure.
+  The Atom feed needs no API token or User-Agent (unlike api.github.com). }
+function FetchLatestTag(): string;
+var
+  S: AnsiString;
+begin
+  Result := '';
+  try
+    DownloadTemporaryFile(
+      'https://github.com/{#RepoOwner}/{#RepoName}/releases.atom',
+      'gpb_releases.atom', '', nil);
+    if LoadStringFromFile(ExpandConstant('{tmp}\gpb_releases.atom'), S) then
+      Result := ParseAtomTag(S);
+  except
+    Result := '';  { offline / feed changed / parse failed -> stay silent }
+  end;
+end;
+
+{ Download the given installer asset into the temp dir and launch it. True on ok. }
+function DownloadAndRun(Url, FileName: string): Boolean;
+var
+  rc: Integer;
+begin
+  Result := False;
+  DownloadPage.Clear;
+  DownloadPage.Add(Url, FileName, '');
+  DownloadPage.Show;
+  try
+    try
+      DownloadPage.Download;
+      Result := True;
+    except
+      Result := False;
+    end;
+  finally
+    DownloadPage.Hide;
+  end;
+  if Result then
+    Result := Exec(ExpandConstant('{tmp}\' + FileName), '', '',
+                   SW_SHOWNORMAL, ewNoWait, rc);
+end;
+
+{ If GitHub has a release newer than max(installed, bundled), offer to fetch and
+  run it. Returns True when a newer installer was launched (caller should close). }
+function MaybeOfferUpdate(): Boolean;
+var
+  latest, installed, baseline, assetName, assetUrl: string;
+begin
+  Result := False;
+  if HasCmdParam('/SKIPUPDATECHECK') then
+    Exit;
+
+  latest := FetchLatestTag();
+  if latest = '' then
+    Exit;
+
+  baseline := '{#ModVersion}';
+  installed := ReadInstalledModVer(GetModsVersionDir(''));
+  if (installed <> '') and (VerCompare(installed, baseline) > 0) then
+    baseline := installed;
+
+  if VerCompare(latest, baseline) <= 0 then
+    Exit;  { already current }
+
+  if MsgBox('A newer version of Garage Progress Bar is available.'#13#10#13#10 +
+            'Latest available: ' + latest + #13#10 +
+            'This installer: {#ModVersion}'#13#10#13#10 +
+            'Download and run the latest installer now?',
+            mbConfirmation, MB_YESNO) <> IDYES then
+    Exit;
+
+  assetName := '{#SetupBaseName}-' + latest + '.exe';
+  assetUrl := 'https://github.com/{#RepoOwner}/{#RepoName}/releases/download/v' +
+              latest + '/' + assetName;
+  if DownloadAndRun(assetUrl, assetName) then
+    Result := True
+  else
+    MsgBox('Could not download the new installer automatically.'#13#10 +
+           'You can get it manually from:'#13#10 +
+           'https://github.com/{#RepoOwner}/{#RepoName}/releases/latest'#13#10#13#10 +
+           'Setup will continue with the bundled version.',
+           mbInformation, MB_OK);
+end;
+
 { ---- wizard flow --------------------------------------------------------- }
+
+procedure InitializeWizard();
+begin
+  { Pre-create the download page reused by the self-update flow. }
+  DownloadPage := CreateDownloadPage('Checking for updates',
+    'Downloading the latest installer from GitHub...', nil);
+end;
+
+{ Don't show the "Exit Setup?" confirmation when we close to launch the newer one. }
+procedure CancelButtonClick(CurPageID: Integer; var Cancel, Confirm: Boolean);
+begin
+  if GRelaunching then
+    Confirm := False;
+end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 begin
@@ -297,6 +506,20 @@ begin
              mbError, MB_OK);
       Result := False;
       Exit;
+    end;
+    { GVersion + the app dir are now known, so we can read any installed mod
+      version. Check GitHub once; if a newer installer exists, fetch and launch
+      it, then close this wizard. Best-effort -- silent when offline / current. }
+    if not GUpdateChecked then
+    begin
+      GUpdateChecked := True;
+      if MaybeOfferUpdate() then
+      begin
+        GRelaunching := True;
+        Result := False;
+        WizardForm.Close;
+        Exit;
+      end;
     end;
   end;
 end;

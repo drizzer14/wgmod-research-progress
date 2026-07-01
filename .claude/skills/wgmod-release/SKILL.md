@@ -53,6 +53,11 @@ gh release create vX.Y.Z --title "Garage Progress Bar vX.Y.Z" --notes-file <body
 Body: intro blurb + `### What's new in X.Y.Z` + Requirements + Install (recommended,
 .exe) + Manual install (.wotmod).
 
+**Do not rename the setup .exe asset.** The installer's self-update check builds the
+download URL from the tag + the fixed name `GarageProgressBar-Setup-<version>.exe`
+(`SetupBaseName`/`OutputBaseFilename` in `wgmod-setup.iss`). Keep the tag `vX.Y.Z` and
+this asset filename convention, or older installers can't fetch the new build.
+
 ## Machine state
 - `gh` at `C:\Program Files\GitHub CLI\gh`, authed as 14th_ua.
 - `ISCC.exe` at `%LOCALAPPDATA%\Programs\Inno Setup 6\` (Find-ISCC checks there).

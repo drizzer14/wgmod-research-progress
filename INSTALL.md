@@ -31,9 +31,11 @@ This build targets the Wargaming EU/global client (version 2.3.0.1).
 2. Run **`GarageProgressBar-Setup-0.2.0.exe`**.
 3. Confirm your World of Tanks folder when the installer shows it — the folder that
    contains `version.xml`. The installer detects it automatically in most cases.
-4. The installer adds OpenWG GameFace and ModsSettingsAPI when your client doesn't
+4. If a newer version is available on GitHub, the installer offers to download and
+   run the latest installer for you — accept to always get the newest build.
+5. The installer adds OpenWG GameFace and ModsSettingsAPI when your client doesn't
    already have them, then installs the mod into `mods\<version>\`.
-5. Start the game and go to the Garage. Adjust the bar under **Settings → Mods →
+6. Start the game and go to the Garage. Adjust the bar under **Settings → Mods →
    Garage Progress Bar** if you like.
 
 To remove the mod later, use its entry in Windows **Apps & features**, or re-run the
