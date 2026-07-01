@@ -15,11 +15,6 @@ Let the user drag the bar to reposition it, to avoid overlap/conflicts with othe
 mods' UI. Persist the dragged position (ties into the settings system / "bar position"
 candidate). Feasibility under Gameface is unconfirmed — needs investigation.
 
-### Installer update check
-Installer fetches the latest mod version (initially from GitHub releases; later from
-the official WG mods portal) and, if a newer version than the installed one is found,
-suggests updating.
-
 ### Candidate settings (for the settings system in progress)
 Everything below is currently hardcoded and would make a useful user setting. Listed
 by likely demand; the settings framework being built is the vehicle for these.
