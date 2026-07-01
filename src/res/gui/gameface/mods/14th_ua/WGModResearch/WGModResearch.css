@@ -674,6 +674,10 @@
     z-index: 4;                 /* above the hover overlay */
     pointer-events: none;
     box-sizing: border-box;
+    /* A width floor so short tooltips (a bare caption + "Requires:" line) don't
+       collapse to a sliver -- which made the full-width section divider shrink with
+       them. Content still grows the box up to max-width. */
+    min-width: 168rem;
     max-width: 300rem;
     white-space: normal;
     padding: 12rem 16rem 14rem;
@@ -766,7 +770,14 @@
 #wgmod-root .wg-tip-div {
     height: 9rem;
     margin: 4rem 0;
-    background: url('img://gui/maps/icons/tooltip/divider.png') no-repeat center / contain;
+    /* Stretch to fill the box (full width x fixed 9rem) rather than `contain`:
+       contain preserves the divider art's very wide aspect ratio, so on a narrow
+       tooltip it scaled the divider's HEIGHT down with the width into a barely-
+       visible sliver. The art is a horizontal line that fades at its ends, so a
+       width-stretch keeps the fade at the tooltip edges (the native full-width
+       section-divider read) at a constant height regardless of tooltip width. */
+    background: url('img://gui/maps/icons/tooltip/divider.png') no-repeat center;
+    background-size: 100% 100%;
 }
 /* A choice variant's own buffs, listed under its name (tertiary body, wrapping).
    The variant NAME keeps the title weight it inherits from .wg-tip-variant. */
@@ -864,6 +875,7 @@
     z-index: 10;
     pointer-events: none;
     box-sizing: border-box;
+    min-width: 168rem;          /* width floor so the section divider doesn't shrink on short perk names */
     white-space: nowrap;        /* short perk names stay one line -> compact box */
     padding: 8rem 12rem 9rem;
     text-align: left;

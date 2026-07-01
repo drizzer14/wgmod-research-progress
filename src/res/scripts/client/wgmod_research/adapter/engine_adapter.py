@@ -647,6 +647,35 @@ def _fmt_pct(pct):
     return "%+.1f%%" % pct
 
 
+def _fmt_signed(v):
+    """A raw additive KPI delta as a signed magnitude ("+3", "-3", "+2.5"). "" if it
+    rounds to zero. No percent/unit suffix -- 'add' KPIs are absolute quantities
+    (e.g. +3 km/h top reverse speed) and the phrase carries the stat name."""
+    r = round(v)
+    if abs(v - r) < 0.05:
+        n = int(r)
+        return "" if n == 0 else ("%+d" % n)
+    return "%+.1f" % v
+
+
+def _kpi_prefix(k):
+    """The signed numeric prefix for a KPI, or "" when it carries no usable number.
+
+    'mul' -> percent from (value-1)*100 ("+10%"); 'add' -> the raw signed delta
+    ("+3", absolute units, no %). Any other numeric type falls back to the raw signed
+    delta (the realistic non-'mul' shape is 'add'; dropping the number is the bug this
+    replaces). "" when the value is missing/non-numeric or rounds to a negligible
+    ~zero. bool is excluded up front (it's an int subclass). KPI types verified live
+    (EU 2.3): 'mul' (Strv 103B et al.) and 'add' (Kranvagn L7 "top reverse speed")."""
+    val = getattr(k, "value", None)
+    if isinstance(val, bool) or not isinstance(val, (int, float)):
+        return ""
+    val = float(val)
+    if (getattr(k, "type", "") or "") == "mul":
+        return _fmt_pct((val - 1.0) * 100.0)
+    return _fmt_signed(val)
+
+
 def _kpi_objs(action):
     """The raw KPI objects on an action's descriptor (action._descriptor.kpi), or []."""
     d = getattr(action, "_descriptor", None)
@@ -658,12 +687,15 @@ def _kpi_lines(action):
     one "<signed %> <stat phrase>" string per KPI that carries a description (e.g.
     "+10% to concealment after firing"). Empty list for actions with no KPI
     (features / role slots) or only the generic unlabeled 'value' KPI (signature
-    mechanic perks -- effect not exposed as text). The KPI value is a multiplier
-    ('mul'); the percent is (value-1)*100. Best-effort, never raises.
+    mechanic perks -- effect not exposed as text). The signed numeric prefix comes
+    from _kpi_prefix ('mul' -> percent, 'add' -> raw delta). Best-effort, never raises.
 
     KPI shape verified live (EU 2.3): action._descriptor.kpi -> [KPI], each with
     getDescriptionR() (DynAccessor -> backport.text -> phrase), .type, .value.
-    A MultiModsItem variant (a `modification`) carries its KPI the same way."""
+    A MultiModsItem variant (a `modification`) carries its KPI the same way. Types seen:
+    'mul' (percent bonuses) and 'add' (absolute deltas, e.g. Kranvagn's top reverse
+    speed) -- an 'add' KPI whose number was dropped by a mul-only gate was the
+    "buff missing its number" bug."""
     lines = []
     try:
         from gui.impl import backport
@@ -675,11 +707,7 @@ def _kpi_lines(action):
                 desc = ""
             if not desc:
                 continue  # generic unlabeled 'value' KPI -> no displayable stat
-            prefix = ""
-            if (getattr(k, "type", "") or "") == "mul":
-                val = getattr(k, "value", None)
-                if isinstance(val, float):
-                    prefix = _fmt_pct((val - 1.0) * 100.0)
+            prefix = _kpi_prefix(k)
             lines.append((prefix + " " + desc) if prefix else desc)
     except Exception:
         LOG_CURRENT_EXCEPTION()
@@ -723,11 +751,17 @@ def _skilltree_effect(action):
             return ""  # no localized description for this node
         value = ""
         for k in _kpi_objs(action):
-            if (getattr(k, "type", "") or "") == "mul":
-                v = getattr(k, "value", None)
-                if isinstance(v, float):
-                    value = _fmt_num(abs((v - 1.0) * 100.0))
-                    break
+            v = getattr(k, "value", None)
+            if isinstance(v, bool) or not isinstance(v, (int, float)):
+                continue
+            v = float(v)
+            ktype = getattr(k, "type", "") or ""
+            if ktype == "mul":
+                value = _fmt_num(abs((v - 1.0) * 100.0))
+                break
+            if ktype == "add":
+                value = _fmt_num(abs(v))
+                break
         return (tmpl.replace("{value}", value)
                     .replace("{colorTagOpen}", "")
                     .replace("{colorTagClose}", "").strip())

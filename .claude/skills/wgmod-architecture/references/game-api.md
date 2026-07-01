@@ -91,8 +91,13 @@ that skill).
   xpCost, set(required), 0, xpFullCost)` from
   `gui.Scaleform.daapi.view.lobby.techtree.settings.UnlockProps`. Build the row from
   `veh.getUnlocksDescrs()`.
-- **Field-mod step:** `gui.shared.event_dispatcher.showPostProgressionResearchDialog(
-  veh, [stepID])` — WG's dialog that BOTH confirms and researches.
+- **Field-mod step:** `factory.doAction(factory.PURCHASE_POST_PROGRESSION_STEPS, veh,
+  [stepID])` (same items-actions factory as tech-tree UNLOCK_ITEM). This runs WG's
+  `AsyncGUIItemAction` confirm→research chain: `_confirm()` shows the dialog,
+  `_action()` runs the purchase processor that actually researches. Do NOT call
+  `event_dispatcher.showPostProgressionResearchDialog(veh, [stepID])` directly — it's a
+  `@wg_async` coroutine that only SHOWS the confirm dialog and returns the choice
+  (`AsyncReturn`); it never researches (the confirm button then does nothing).
 - **Tier-XI skill tree:** `gui.shared.event_dispatcher.showVehicleHubVehSkillTree(
   veh.intCD)` — the current Upgrades screen (the older `showVehPostProgressionView` 404s
   for skill-tree vehicles).

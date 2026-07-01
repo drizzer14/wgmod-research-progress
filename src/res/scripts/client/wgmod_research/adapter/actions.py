@@ -14,8 +14,10 @@ context-menu "Research" handler uses exactly this path):
     `gui.shared.gui_items.items_actions.factory`) .doAction(UNLOCK_ITEM, itemCD,
     UnlockProps). UnlockProps (from techtree.settings) is built from the vehicle's
     own unlock-graph row: (unlockIdx, xpCost, itemCD, required).
-  * Field-mod step: event_dispatcher.showPostProgressionResearchDialog(vehicle,
-    [stepID]) -- WG's dialog that BOTH confirms and researches the step.
+  * Field-mod step: the items-actions factory PURCHASE_POST_PROGRESSION_STEPS
+    action -- WG's confirm-then-research flow (see unlock_field_mod). NOT
+    event_dispatcher.showPostProgressionResearchDialog, which only shows the
+    confirm dialog and returns the choice; it never researches.
   * Screens (tier-XI final tick, choice-pair levels, and every fallback):
     event_dispatcher.showVehPostProgressionView / showResearchView.
 """
@@ -44,14 +46,26 @@ def research_unlock(int_cd):
 
 
 def unlock_field_mod(step_id):
-    """Unlock the post-progression step `step_id` for the selected vehicle, via
-    WG's own confirm-and-research dialog."""
+    """Research the post-progression step `step_id` for the selected vehicle, via
+    WG's own confirm-and-research flow.
+
+    NB: this must go through the items-actions FACTORY, not
+    `showPostProgressionResearchDialog` directly. That event_dispatcher helper is a
+    `@wg_async` coroutine that only SHOWS the confirm dialog and returns the user's
+    choice (`raise AsyncReturn(result)`) -- it does not research anything. WG's own
+    post-progression screen wires it up via the PURCHASE_POST_PROGRESSION_STEPS
+    action (AsyncGUIItemAction): its `_confirm()` shows that same dialog and, only if
+    confirmed, its `_action()` runs the purchase processor that actually researches
+    the step. `factory.doAction` runs that confirm->research chain -- the exact
+    counterpart to the tech-tree UNLOCK_ITEM path in `_do_research`. Verified against
+    the EU 2.3 decompiled client (post_progression_cfg_component.__onPurchaseClick)."""
     veh = _current_vehicle()
     if veh is None:
         return
     try:
-        from gui.shared.event_dispatcher import showPostProgressionResearchDialog
-        showPostProgressionResearchDialog(veh, [int(step_id)])
+        import gui.shared.gui_items.items_actions.factory as actions_factory
+        actions_factory.doAction(
+            actions_factory.PURCHASE_POST_PROGRESSION_STEPS, veh, [int(step_id)])
     except Exception:
         LOG_CURRENT_EXCEPTION()
         _open_field_mods_screen(veh)
