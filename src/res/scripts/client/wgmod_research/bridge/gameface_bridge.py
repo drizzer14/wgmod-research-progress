@@ -312,6 +312,20 @@ def install_colorblind_listener():
 # After a successful action the game fires onSyncCompleted, which the stats
 # listener already turns into a bar refresh -- so handlers do not refresh here.
 
+def _map_get(a, key):
+    """Read `key` from a JS-supplied argument that may be a plain dict or a Wulf-wrapped
+    map. Returns None if unreadable."""
+    if isinstance(a, dict):
+        return a.get(key)
+    getter = getattr(a, "get", None)
+    if callable(getter):
+        try:
+            return a.get(key)
+        except Exception:
+            return None
+    return None
+
+
 def _cmd_int_arg(args):
     """Extract the int id a JS command invocation carried. Wulf delivers a single
     MAP argument (the JS side wraps the id as {value: id}); pull our key out of it,
@@ -366,6 +380,38 @@ def _on_open_skill_tree(*args):
         LOG_CURRENT_EXCEPTION()
 
 
+def _cmd_xy_arg(args):
+    """Extract the (x, y) pixel pair a JS `setPosition` invocation carried. Wulf
+    delivers a single MAP argument ({x, y}); pull both keys, tolerating a plain dict
+    or a wrapped map. Missing/invalid -> 0 (auto)."""
+    def as_int(v):
+        try:
+            return int(v)
+        except (TypeError, ValueError):
+            return 0
+    try:
+        if not args:
+            return 0, 0
+        a = args[0]
+        return as_int(_map_get(a, "x")), as_int(_map_get(a, "y"))
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+        return 0, 0
+
+
+def _on_set_position(*args):
+    try:
+        x, y = _cmd_xy_arg(args)
+        # The widget marks its default-position SEED with seed=1 (measured while the bar
+        # sits at its CSS default). That value becomes the reset target; a plain drag omits
+        # it. See mod_settings.set_position / _store_default_position.
+        is_seed = bool(_map_get(args[0], "seed")) if args else False
+        LOG_NOTE("[wgmod] setPosition x=%s y=%s seed=%s" % (x, y, is_seed))
+        mod_settings.set_position(x, y, is_default=is_seed)
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+
+
 def _connect_commands(rvm):
     """Wire the reverse-channel commands to their handlers. The command objects
     are Wulf events that support +=. A fresh ResearchVM is created per attach(),
@@ -374,6 +420,7 @@ def _connect_commands(rvm):
         rvm.researchUnlock += _on_research_unlock
         rvm.unlockFieldMod += _on_unlock_field_mod
         rvm.openSkillTree += _on_open_skill_tree
+        rvm.setPosition += _on_set_position
     except Exception:
         LOG_CURRENT_EXCEPTION()
 
@@ -476,7 +523,7 @@ class UpgradeVM(ViewModel):
 
 
 class ResearchVM(ViewModel):
-    def __init__(self, properties=18, commands=3):
+    def __init__(self, properties=20, commands=4):
         super(ResearchVM, self).__init__(properties=properties, commands=commands)
 
     def _initialize(self):
@@ -499,12 +546,15 @@ class ResearchVM(ViewModel):
         self._addArrayProperty("availUpgrades", Array())  # 15 ([UpgradeVM] -> chips)
         self._addNumberProperty("spendableXp", 0)    # 16 (vehicle XP + free XP, for affordability)
         self._addBoolProperty("colorBlind", False)   # 17 (mirror WoT's color-blind mode)
+        self._addNumberProperty("posX", 0)           # 18 (bar center-x px; 0 = auto/CSS default)
+        self._addNumberProperty("posY", 0)           # 19 (bar top px; 0 = auto/CSS default)
         # Reverse channel: JS click handlers invoke these commands. Each returns a
         # command object that connect_commands() wires to a Python handler. Wulf
         # delivers the JS-supplied argument(s) to those handlers.
         self.researchUnlock = self._addCommand("researchUnlock")    # arg: tech-tree int_cd
         self.unlockFieldMod = self._addCommand("unlockFieldMod")    # arg: field-mod step_id
         self.openSkillTree = self._addCommand("openSkillTree")      # no arg
+        self.setPosition = self._addCommand("setPosition")          # arg: {x, y} px (drag / seed)
 
     def setMode(self, v):
         self._setString(0, v)
@@ -559,6 +609,12 @@ class ResearchVM(ViewModel):
 
     def setColorBlind(self, v):
         self._setBool(17, v)
+
+    def setPosX(self, v):
+        self._setNumber(18, v)
+
+    def setPosY(self, v):
+        self._setNumber(19, v)
 
     @staticmethod
     def getTicksType():
@@ -617,6 +673,8 @@ def push(rvm, host_vm=None):
                                       mod_settings.hide_when_complete(), model.mode,
                                       _in_garage()))
             tx.setColorBlind(engine_adapter.is_color_blind())
+            tx.setPosX(mod_settings.pos_x())
+            tx.setPosY(mod_settings.pos_y())
             tx.setMode(model.mode)
             tx.setScaleMin(model.scale_min)
             tx.setScaleMax(model.scale_max)

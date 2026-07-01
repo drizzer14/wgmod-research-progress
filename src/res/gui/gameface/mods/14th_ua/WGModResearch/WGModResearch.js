@@ -261,8 +261,10 @@ function invokeCommand(name, arg) {
         }
         if (!host) { console.error("[wgmod] command missing: " + name); return; }
         // Wulf commands take a single MAP argument (a raw scalar is rejected by
-        // Gameface as "not a map"); wrap the id so Python can read it back out.
+        // Gameface as "not a map"). A scalar id is wrapped as {value: id}; an arg
+        // that's already a map (e.g. setPosition's {x, y}) is passed through as-is.
         if (arg === undefined || arg === null) host[name]();
+        else if (typeof arg === "object") host[name](arg);
         else host[name]({ value: arg });
     } catch (e) {
         console.error("[wgmod] invokeCommand failed: " + name, e);
@@ -415,6 +417,7 @@ function setActiveChip(hotEl, chip) {
     }
     if (chip) {
         chip.tip.style.display = "block";
+        clampTip(chip.tip);   // keep it within the bar width / flip above near the bottom
     }
     hotEl._wgActiveChip = chip || null;
 }
@@ -499,6 +502,79 @@ function cbClass(data) {
     return data && data.colorBlind ? " wg-colorblind" : "";
 }
 
+// Apply the user's dragged bar position (px), or fall back to the CSS default and seed
+// the settings fields from the live layout. posX = bar CENTER-x, posY = bar TOP (px),
+// both 0 == "auto". When auto, we clear the inline left/top (so the CSS default --
+// centered, 17.6vh -- applies) and, once, measure where the bar actually landed and
+// report it back via setPosition, so the numeric settings fields show real coordinates
+// with no visible jump. Fail-open: an older Python build without posX -> leave default.
+function applyPosition(root, data) {
+    if (root._wgDragging) return;   // never fight an in-progress drag
+    if (!data || data.posX === undefined) return;   // feature absent -> CSS default
+    const x = data.posX | 0;
+    const y = data.posY | 0;
+    if (x > 0 && y > 0) {
+        root._wgSeedPending = false;
+        root.style.left = x + "px";
+        root.style.top = y + "px";
+        return;
+    }
+    // auto / unseeded: keep the CSS default position...
+    root.style.left = "";
+    root.style.top = "";
+    // ...and seed the settings fields once from the live layout (guarded so exactly one
+    // seed is sent until Python echoes a concrete position back).
+    if (root._wgSeedPending) return;
+    root._wgSeedPending = true;
+    const raf = window.requestAnimationFrame || function (f) { f(); };
+    raf(function () {
+        const r = root.getBoundingClientRect();
+        if (!r || !r.width) { root._wgSeedPending = false; return; }
+        const cx = Math.round(r.left + r.width / 2);
+        const cy = Math.round(r.top);
+        // seed:1 marks this as the DEFAULT position (measured at the CSS default spot), so
+        // Python records it as the reset target -> the panel's reset repaints X/Y to the
+        // real default coords, not 0/0.
+        if (cx > 0 && cy > 0) invokeCommand("setPosition", { x: cx, y: cy, seed: 1 });
+        else root._wgSeedPending = false;
+    });
+}
+
+// Keep a shown tooltip on-screen: clamp it horizontally within the BAR's own width
+// (the track's left/right edges -- the tooltip's max-width is narrower than the bar, so
+// it always fits, and since the drag keeps the bar on-screen this also prevents any
+// screen-edge overflow), and flip it above the bar if it would spill past the viewport
+// bottom. Overrides are set inline and reset each call so a tooltip that now fits
+// returns to its centered, below-the-bar default. Reused for the tick + chip tooltips.
+function clampTip(tipEl) {
+    // reset prior overrides -> transform reverts to the CSS translateX(-50%) centering
+    tipEl.style.transform = "";
+    tipEl.style.top = "";
+    tipEl.style.bottom = "";
+    tipEl.style.marginTop = "";
+    tipEl.style.marginBottom = "";
+    const track = document.querySelector("#wgmod-root .wg-track");
+    if (!track) return;
+    const bar = track.getBoundingClientRect();
+    const tip = tipEl.getBoundingClientRect();
+    if (!tip.width) return;
+    let dx = 0;
+    if (tip.left < bar.left) dx = bar.left - tip.left;
+    else if (tip.right > bar.right) dx = bar.right - tip.right;
+    if (dx) {
+        // preserve the CSS centering (translateX(-50%)) and add the correction
+        tipEl.style.transform = "translateX(-50%) translateX(" + Math.round(dx) + "px)";
+    }
+    const vh = window.innerHeight || 0;
+    if (vh && tip.bottom > vh - 4) {
+        // flip above the bar (default hangs below at top:100%)
+        tipEl.style.top = "auto";
+        tipEl.style.bottom = "100%";
+        tipEl.style.marginTop = "0";
+        tipEl.style.marginBottom = "8rem";
+    }
+}
+
 function render(model) {
     const root = ensureRoot();
     const label = root.querySelector(".wg-label");
@@ -541,6 +617,10 @@ function render(model) {
         return;
     }
     root.style.display = "";
+
+    // Apply the user's dragged/typed bar position (or the CSS default + seed) before any
+    // mode branch, so every mode -- including the elite early-return below -- honors it.
+    applyPosition(root, data);
 
     // Elite Levels (prestige) modes own the whole header + bar (grade/reward
     // readout, single-segment fill, combat-XP star), so they branch out early.
@@ -921,20 +1001,25 @@ function ensureHover(hotEl, tipEl) {
         tipEl.innerHTML = body;
         tipEl.style.left = leftPct + "%";
         tipEl.style.display = "block";
+        clampTip(tipEl);   // keep it within the bar width / flip above near the bottom
     };
     hotEl.addEventListener("mousemove", function (e) {
+        // While Ctrl is held the bar is in reposition mode -> a move cursor, no matter
+        // what's under the cursor (Ctrl+drag moves the bar; see the mousedown handler).
+        const dragMode = e.ctrlKey;
         // Tier-XI "Next available:" chips first (they own a framed tooltip + click,
         // hit-tested here since they can't receive events themselves).
         const chip = chipAt(hotEl, e.clientX, e.clientY);
         if (chip) {
             setActiveChip(hotEl, chip);
             tipEl.style.display = "none";
-            hotEl.style.cursor = "pointer";
+            hotEl.style.cursor = dragMode ? "move" : "pointer";
             return;
         }
         setActiveChip(hotEl, null);
         // Pointer affordance: a pointer cursor only while over a clickable tick.
-        hotEl.style.cursor = nearestClick(hotEl, e.clientX) ? "pointer" : "";
+        hotEl.style.cursor = dragMode ? "move"
+            : (nearestClick(hotEl, e.clientX) ? "pointer" : "");
         // (1) exact element under the cursor.
         let node = e.target;
         while (node && node !== hotEl) {
@@ -963,9 +1048,59 @@ function ensureHover(hotEl, tipEl) {
         setActiveChip(hotEl, null);
         tipEl.style.display = "none";
     });
+    // Ctrl+drag to reposition the whole bar. Ctrl-gated so a normal click can't move it
+    // by accident; a plain mousedown falls through to the click handler (research/unlock).
+    // The bar is position:fixed with translateX(-50%), so we track the bar's CENTER-x /
+    // TOP (the stored anchor). On release we report the final px to Python via
+    // setPosition, which persists it (MSA) and re-pushes -- applyPosition then re-applies
+    // the same coords (no jump). _wgDidDrag suppresses the click that follows the drag.
+    hotEl.addEventListener("mousedown", function (e) {
+        if (!e.ctrlKey) return;
+        const root = document.getElementById("wgmod-root");
+        if (!root) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const r0 = root.getBoundingClientRect();
+        const halfW = r0.width / 2;
+        const offX = e.clientX - (r0.left + halfW);   // cursor -> bar center-x
+        const offY = e.clientY - r0.top;              // cursor -> bar top
+        root._wgDragging = true;
+        root._wgDidDrag = true;
+        hotEl.style.cursor = "move";
+        const onMove = function (ev) {
+            const w = window.innerWidth || 0;
+            const h = window.innerHeight || 0;
+            let cx = ev.clientX - offX;
+            let cy = ev.clientY - offY;
+            // clamp so the bar can't be dragged off-screen (whole width kept visible)
+            if (w) cx = Math.max(halfW, Math.min(w - halfW, cx));
+            if (h) cy = Math.max(0, Math.min(h - 20, cy));
+            root.style.left = Math.round(cx) + "px";
+            root.style.top = Math.round(cy) + "px";
+        };
+        const onUp = function () {
+            document.removeEventListener("mousemove", onMove, true);
+            document.removeEventListener("mouseup", onUp, true);
+            root._wgDragging = false;
+            const r = root.getBoundingClientRect();
+            invokeCommand("setPosition", {
+                x: Math.round(r.left + r.width / 2),
+                y: Math.round(r.top),
+            });
+            // keep _wgDidDrag set through the click that fires right after this mouseup,
+            // then clear it (the click handler reads it to suppress a research action).
+            setTimeout(function () { root._wgDidDrag = false; }, 0);
+        };
+        document.addEventListener("mousemove", onMove, true);
+        document.addEventListener("mouseup", onUp, true);
+    });
     // Click -> a Tier-XI chip (exact box hit) first, else the nearest clickable tick
-    // (proximity-gated, with WG's confirm dialog backstopping any imprecise hit).
+    // (proximity-gated, with WG's confirm dialog backstopping any imprecise hit). Bail on
+    // a Ctrl-click or the tail of a drag so repositioning never triggers research/unlock.
     hotEl.addEventListener("click", function (e) {
+        if (e.ctrlKey) return;
+        const root = document.getElementById("wgmod-root");
+        if (root && root._wgDidDrag) return;
         const chip = chipAt(hotEl, e.clientX, e.clientY);
         if (chip) { invokeCommand(chip.cmd, chip.arg); return; }
         const hit = nearestClick(hotEl, e.clientX);

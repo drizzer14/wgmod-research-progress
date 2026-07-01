@@ -10,17 +10,11 @@ show in the actual garage. Extends the existing visibility mechanism (the `visib
 VM prop + loadout-overlay auto-hide in `gameface_bridge.py`); needs detection of
 which view is mounted.
 
-### Draggable bar position (feasibility unknown)
-Let the user drag the bar to reposition it, to avoid overlap/conflicts with other
-mods' UI. Persist the dragged position (ties into the settings system / "bar position"
-candidate). Feasibility under Gameface is unconfirmed — needs investigation.
-
 ### Candidate settings (for the settings system in progress)
 Everything below is currently hardcoded and would make a useful user setting. Listed
 by likely demand; the settings framework being built is the vehicle for these.
 
 **High impact**
-- **Bar position** — vertical/horizontal anchor (`WGModResearch.css`: `top: 17.6vh`, `left: 50%`). For different resolutions, ultrawide/dual-screen.
 - **Bar width / scale** (`WGModResearch.css`: `width: 520rem`). Shrink on small screens, grow on large.
 - **Mode toggles** — let users hide bar modes they don't care about (tech-tree / field-mods / skill-tree / elite / elite-rewards). Gated in `domain/builder.py` priority chain.
 - **Fill colors** — vehicle-XP, free-XP, complete, elite, elite-rewards fills (hardcoded hex in `WGModResearch.css` ~219–247). Accessibility/color-blind + theming.
