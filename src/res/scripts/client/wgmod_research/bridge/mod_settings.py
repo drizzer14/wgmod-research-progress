@@ -10,6 +10,11 @@ Two independent "hide" checkboxes, both default OFF (bar shown):
 - hideAlways       -- hide the whole widget on every vehicle (master switch).
 - hideWhenComplete -- hide only on fully-progressed (Mode.COMPLETE) vehicles.
 
+Plus five per-mode "show" checkboxes, all default ON, one per bar mode
+(showTechTree / showSkillTree / showFieldMods / showEliteRewards / showElite).
+enabled_modes() turns these into the set of enabled Mode strings that build_model
+consumes: a vehicle whose resolved mode is off hides the bar (no fall-through).
+
 Plus a draggable bar position, stored as two on-screen PIXEL coordinates:
 - posX -- the bar's CENTER-x in px (matches the CSS translateX(-50%) center-anchor).
 - posY -- the bar's TOP in px.
@@ -38,7 +43,12 @@ LINKAGE = "com.14th_ua.garageprogressbar"
 # typed/echoed value is clamped into [0, POS_MAX], with 0 meaning "auto / unseeded".
 POS_MAX = 20000
 
-DEFAULTS = {"hideAlways": False, "hideWhenComplete": False, "posX": 0, "posY": 0}
+DEFAULTS = {"hideAlways": False, "hideWhenComplete": False, "posX": 0, "posY": 0,
+            # Per-mode toggles, all default True (every mode shown). When a mode is
+            # off, a vehicle that resolves to it hides the bar -- no fall-through
+            # (see domain.builder.build_model / enabled_modes below).
+            "showTechTree": True, "showSkillTree": True, "showFieldMods": True,
+            "showEliteRewards": True, "showElite": True}
 
 
 def clamp_pos(v):
@@ -78,7 +88,7 @@ def _template():
         # settings to defaults when this number is BUMPED. Bump it whenever the set of
         # varNames / control layout changes (not for text-only edits). Verified against
         # the Aslain 1.3.2 + izeberg 1.7.0 compareTemplates bytecode.
-        "settingsVersion": 1,
+        "settingsVersion": 2,
         "column1": [
             {
                 "type": "CheckBox",
@@ -96,6 +106,59 @@ def _template():
                             "{BODY}Hides the bar only on vehicles with nothing left "
                             "to research, upgrade, or unlock.{/BODY}"),
                 "varName": "hideWhenComplete",
+            },
+            {
+                "type": "Label",
+                "text": "Bar modes",
+                "tooltip": ("{HEADER}Bar modes{/HEADER}"
+                            "{BODY}Turn off the bar modes you don't care about. When a "
+                            "vehicle's progress falls under a mode you've hidden, the bar "
+                            "is hidden for it (it does not switch to another mode).{/BODY}"),
+            },
+            {
+                "type": "CheckBox",
+                "text": "Show research (tech tree)",
+                "value": DEFAULTS["showTechTree"],
+                "tooltip": ("{HEADER}Show research{/HEADER}"
+                            "{BODY}The tech-tree progress toward the vehicle's remaining "
+                            "module and next-vehicle unlocks.{/BODY}"),
+                "varName": "showTechTree",
+            },
+            {
+                "type": "CheckBox",
+                "text": "Show tier-XI upgrades",
+                "value": DEFAULTS["showSkillTree"],
+                "tooltip": ("{HEADER}Show tier-XI upgrades{/HEADER}"
+                            "{BODY}The branching upgrade (skill) tree on tier-XI "
+                            "vehicles.{/BODY}"),
+                "varName": "showSkillTree",
+            },
+            {
+                "type": "CheckBox",
+                "text": "Show field modifications",
+                "value": DEFAULTS["showFieldMods"],
+                "tooltip": ("{HEADER}Show field modifications{/HEADER}"
+                            "{BODY}The field-modification steps unlocked once the vehicle "
+                            "is fully researched.{/BODY}"),
+                "varName": "showFieldMods",
+            },
+            {
+                "type": "CheckBox",
+                "text": "Show Elite rewards",
+                "value": DEFAULTS["showEliteRewards"],
+                "tooltip": ("{HEADER}Show Elite rewards{/HEADER}"
+                            "{BODY}The tier-exclusive milestone-reward roadmap on prestige "
+                            "vehicles.{/BODY}"),
+                "varName": "showEliteRewards",
+            },
+            {
+                "type": "CheckBox",
+                "text": "Show Elite progression",
+                "value": DEFAULTS["showElite"],
+                "tooltip": ("{HEADER}Show Elite progression{/HEADER}"
+                            "{BODY}The Elite-Levels grade-band progression on prestige "
+                            "vehicles.{/BODY}"),
+                "varName": "showElite",
             },
         ],
         "column2": [
@@ -430,3 +493,22 @@ def pos_x():
 
 def pos_y():
     return _settings["posY"]
+
+
+def enabled_modes():
+    """The set of bar Mode strings the user has left ON, for domain.builder.build_model
+    (a vehicle whose resolved mode is absent hides the bar -- no fall-through). COMPLETE
+    is never toggleable here (it's the genuine end-state, governed by hideWhenComplete)."""
+    from wgmod_research.domain import types as t
+    modes = set()
+    if _settings["showTechTree"]:
+        modes.add(t.Mode.TECH_TREE)
+    if _settings["showSkillTree"]:
+        modes.add(t.Mode.SKILL_TREE)
+    if _settings["showFieldMods"]:
+        modes.add(t.Mode.FIELD_MODS)
+    if _settings["showEliteRewards"]:
+        modes.add(t.Mode.ELITE_REWARDS)
+    if _settings["showElite"]:
+        modes.add(t.Mode.ELITE)
+    return modes

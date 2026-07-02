@@ -26,4 +26,4 @@ tight) — do not duplicate it here:
 - **wgmod-architecture** — the layered domain/adapter/bridge design, Python data flows, conventions (+ `references/game-api.md`).
 - **wgmod-widget** — the Gameface HTML/CSS/JS widget: DOM, icon URLs, render branches, hover/click, CSS quirks.
 - **wgmod-debug-repl** — live in-client TCP REPL introspection and dev-loop troubleshooting.
-- **wgmod-plan-saver** — capture/prune ideas in the `IDEAS.md` backlog (record on request, delete once shipped).
+- **wgmod-plan-saver** — research each submitted idea/bug and save an implementer-ready note under `IDEAS/`, plus capture/prune short entries in the `IDEAS.md` backlog (record on request, delete once shipped).

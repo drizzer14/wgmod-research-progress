@@ -111,6 +111,27 @@ def test_grade_band_empty_returns_none():
     assert elite.resolve_grade_band(_snap(0, grades=[])) is None
 
 
+# --- current grade icon (category-icon emblem, shared by both elite modes) ----
+
+def test_current_grade_icon_is_highest_reached():
+    # level 12 -> highest grade reached is bronze sub1 (@10); bronze2 (@13) not yet.
+    assert elite.current_grade_icon(_snap(12)) == \
+        "img://gui/maps/icons/prestige/emblem/72x72/bronze/1.png"
+
+
+def test_current_grade_icon_below_first_threshold_is_empty():
+    assert elite.current_grade_icon(_snap(0)) == ""
+
+
+def test_current_grade_icon_at_max_is_prestige():
+    assert elite.current_grade_icon(_snap(20, max_level=20)) == \
+        "img://gui/maps/icons/prestige/emblem/72x72/prestige.png"
+
+
+def test_current_grade_icon_no_grades_is_empty():
+    assert elite.current_grade_icon(_snap(5, grades=[])) == ""
+
+
 # --- reward track --------------------------------------------------------
 
 def test_reward_track_states_and_span():

@@ -168,6 +168,9 @@
    the Total-XP star's visual size in the other modes. */
 #wgmod-root.wg-elite .wg-xp-ico {
     background-size: 130%;
+    position: relative;
+    top: -1rem;                 /* the combat-XP star's art sits low in its box --
+                                   nudge up to optically center it with the figure */
 }
 
 /* Track: flat dark channel with a TWO-TONE frame -- a dark outer border, then a
@@ -330,13 +333,85 @@
     color: #ffaa4c;
 }
 /* ============================================================================ */
-/* Elite modes show the class+elite badge as the category icon (like COMPLETE):
-   it already carries a baked-in shadow and more internal padding. */
+/* Elite modes: the category icon is the current-grade emblem (+ level number), or
+   the class+elite badge fallback. Sized smaller than the other categories -- the
+   emblem badge reads busy at full size next to the label. background-size:contain
+   scales the emblem to the box, and the overlaid number is scaled to match below. */
 #wgmod-root.wg-elite .wg-cat-icon {
-    width: 30rem;
-    height: 30rem;
+    width: 23rem;
+    height: 23rem;
     margin-top: 0;
     filter: none;
+}
+/* Scale the overlaid level-number digits down with the smaller emblem box (the tick
+   emblems keep the full 30rem badge + 11rem digits; this cat-icon badge is ~0.77x). */
+#wgmod-root.wg-elite .wg-cat-icon .wg-emblem-digit {
+    width: 4.2rem;
+    height: 8.4rem;
+}
+#wgmod-root.wg-elite .wg-cat-icon .wg-emblem-digit-one {
+    width: 3rem;
+}
+/* The "tab" arrowhead badge -- an EXACT copy of the game's PrestigeProgressTab
+   component: a 36x16rem base, the arrowhead icon filling it (rotateY(180deg) to point
+   left, the game's __left variant), and the level numeral right-aligned into the well
+   (padding-right 5rem, text-align right) so ANY digit count sits correctly without
+   per-size math. Placed so the numeral lands at the bar's left edge; slide the whole
+   badge with the translateX below. */
+#wgmod-root.wg-elite .wg-cat-icon-tab {
+    width: 36rem;
+    height: 16rem;
+    /* Center the box on the bar's left edge (like a tick at pct 0), then correct the
+       header-vs-track origin offset so the badge content lines up exactly with the
+       first tick below. The shared .wg-tab-<size> margin-left does the rest. */
+    transform: translate(-50%, -50%) translateX(2.5rem);
+    overflow: visible;
+}
+/* Below-bar grade tick badge -- the same arrowhead as the cat icon (shares the
+   .wg-tab art/num rules below), hung centered beneath its tick like .wg-tick-emblem. */
+#wgmod-root .wg-tick-tab {
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    margin-top: 4rem;
+    transform: translateX(-50%);         /* owned by applyLane when stacked */
+    width: 36rem;
+    height: 16rem;
+}
+/* The mirrored arrowhead art is right-anchored by a size-dependent amount, so center
+   the visible content on the anchor with a per-size margin-left (composes with the
+   translateX centering + any lane translate). Shared by the tick badges AND the
+   category-icon badge so both content-center on the bar's left edge and line up.
+   long ~fills the box already -> ~0. */
+#wgmod-root .wg-tab-short  { margin-left: -9rem; }
+#wgmod-root .wg-tab-medium { margin-left: -6rem; }
+#wgmod-root .wg-tab-long   { margin-left: 0; }
+/* art + numeral styling is shared by BOTH tab hosts (cat icon + tick badge) via .wg-tab. */
+#wgmod-root.wg-elite .wg-tab .wg-tab-art {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: no-repeat center / contain;
+    transform: scaleX(-1);               /* point left (game __left variant, mirror) */
+}
+#wgmod-root.wg-elite .wg-tab .wg-tab-num {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    align-items: center;                 /* vertical-center in the 16rem badge */
+    justify-content: flex-end;           /* left variant: numeral hugs the well (right) */
+    padding-right: 6rem;                 /* nudged past the game's 5rem to tuck the numeral
+                                            tighter against the arrowhead (right-aligned) */
+    font-family: "PFDINMax", sans-serif;
+    font-size: 14rem;                    /* carousel numeral is slightly taller than the
+                                            game CSS's nominal 13rem at our bar's rem base */
+    font-weight: 500;
+    /* color is set per-grade inline (GRADE_COLOR in the JS -- exact game values). */
 }
 
 #wgmod-root .wg-ticks {
@@ -630,7 +705,20 @@
             drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
     opacity: 1;
 }
-#wgmod-root .wg-state-upcoming .wg-tick-emblem {
+/* The arrowhead tab art is already bright + grade-colored, so the emblem-strength
+   halos above wash it out. Tab badges get gentler treatments: earned = full color +
+   a plain dark shadow (color alone reads as lit); next = a soft (not blazing) glow. */
+#wgmod-root .wg-state-achieved .wg-tick-tab {
+    filter: drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+    opacity: 1;
+}
+#wgmod-root .wg-state-next .wg-tick-tab {
+    filter: drop-shadow(0 0 3rem rgba(255, 255, 255, 0.5))
+            drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+    opacity: 1;
+}
+#wgmod-root .wg-state-upcoming .wg-tick-emblem,
+#wgmod-root .wg-state-upcoming .wg-tick-tab {
     /* not yet -> a hard brightness cut turns any metal-tier badge into a dark, dim
        shape that clearly reads "locked" beside the full-brightness earned/next
        badges. grayscale() is NOT used -- it does not render in the live client, so

@@ -305,3 +305,74 @@ def test_skill_tree_ticks_have_no_action_id():
     # actionable, so they carry no action identity.
     m = build_model(_skill_snap(done=10, total=26))
     assert all(tk.action_id == 0 for tk in m.ticks)
+
+
+# --- per-mode toggles (enabled set) ---------------------------------------
+# `enabled` is the set of Mode strings left ON; None = all on. A vehicle whose
+# resolved mode is off yields Mode.HIDDEN -- NO fall-through to a lower mode.
+
+_ALL_MODES = {t.Mode.TECH_TREE, t.Mode.SKILL_TREE, t.Mode.FIELD_MODS,
+              t.Mode.ELITE_REWARDS, t.Mode.ELITE}
+
+
+def _without(mode):
+    return _ALL_MODES - {mode}
+
+
+def test_enabled_none_is_unchanged():
+    # Default (no toggle set) behaves exactly as before: research shows.
+    snap = t.VehicleSnapshot(tier=6, is_elite=False, vehicle_xp=500, free_xp=0,
+                             tech_unlocks=[_u(1, 1000)])
+    assert build_model(snap).mode == t.Mode.TECH_TREE
+    assert build_model(snap, None).mode == t.Mode.TECH_TREE
+
+
+def test_tech_tree_disabled_hides():
+    snap = t.VehicleSnapshot(tier=6, is_elite=False, vehicle_xp=500, free_xp=0,
+                             tech_unlocks=[_u(1, 1000)])
+    m = build_model(snap, _without(t.Mode.TECH_TREE))
+    assert m.mode == t.Mode.HIDDEN
+    assert m.ticks == []
+
+
+def test_skill_tree_disabled_hides():
+    m = build_model(_skill_snap(done=10, total=26), _without(t.Mode.SKILL_TREE))
+    assert m.mode == t.Mode.HIDDEN
+
+
+def test_field_mods_disabled_hides():
+    snap = t.VehicleSnapshot(tier=10, is_elite=True, vehicle_xp=0, free_xp=0,
+                             field_mod_steps=[_step(1, 2000)])
+    m = build_model(snap, _without(t.Mode.FIELD_MODS))
+    assert m.mode == t.Mode.HIDDEN
+
+
+def test_elite_rewards_disabled_hides_no_fall_through_to_band():
+    # Rewards unearned resolves ELITE_REWARDS; with it off the bar HIDES -- it does
+    # NOT drop to the grade band even though ELITE is still enabled.
+    snap = _elite_snap(rewards=[t.EliteReward(50, True), t.EliteReward(100, False)])
+    m = build_model(snap, _without(t.Mode.ELITE_REWARDS))
+    assert m.mode == t.Mode.HIDDEN
+
+
+def test_elite_disabled_hides():
+    # All rewards earned -> resolves to the grade band; with ELITE off, hide.
+    snap = _elite_snap(rewards=[t.EliteReward(50, True), t.EliteReward(100, True)])
+    m = build_model(snap, _without(t.Mode.ELITE))
+    assert m.mode == t.Mode.HIDDEN
+
+
+def test_disabling_a_non_matching_higher_mode_is_a_no_op():
+    # A fully-researched field-mod tank never resolves to tech-tree, so disabling
+    # tech-tree leaves FIELD_MODS showing (only the RESOLVED mode's toggle matters).
+    snap = t.VehicleSnapshot(tier=10, is_elite=True, vehicle_xp=1000, free_xp=0,
+                             field_mod_steps=[_step(1, 2000)])
+    m = build_model(snap, _without(t.Mode.TECH_TREE))
+    assert m.mode == t.Mode.FIELD_MODS
+
+
+def test_genuine_complete_unaffected_by_toggles():
+    # COMPLETE is the genuine end-state, never toggled: even with every mode off,
+    # a fully-done vehicle still shows COMPLETE (not HIDDEN).
+    snap = t.VehicleSnapshot(tier=8, is_elite=True, vehicle_xp=0, free_xp=0)
+    assert build_model(snap, set()).mode == t.Mode.COMPLETE

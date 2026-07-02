@@ -548,6 +548,7 @@ class ResearchVM(ViewModel):
         self._addBoolProperty("colorBlind", False)   # 17 (mirror WoT's color-blind mode)
         self._addNumberProperty("posX", 0)           # 18 (bar center-x px; 0 = auto/CSS default)
         self._addNumberProperty("posY", 0)           # 19 (bar top px; 0 = auto/CSS default)
+        self._addStringProperty("eliteCurrentIcon", "")  # 20 (current-grade emblem for the category icon)
         # Reverse channel: JS click handlers invoke these commands. Each returns a
         # command object that connect_commands() wires to a Python handler. Wulf
         # delivers the JS-supplied argument(s) to those handlers.
@@ -594,6 +595,9 @@ class ResearchVM(ViewModel):
 
     def setEliteSub(self, v):
         self._setNumber(12, v)
+
+    def setEliteCurrentIcon(self, v):
+        self._setString(20, v)
 
     def setCombatXp(self, v):
         self._setNumber(13, v)
@@ -665,7 +669,7 @@ def push(rvm, host_vm=None):
         snap = engine_adapter.build_snapshot()
         if snap is None:
             return
-        model = build_model(snap)
+        model = build_model(snap, mod_settings.enabled_modes())
         LOG_NOTE("[wgmod] push mode=%s ticks=%d fillV=%d fillF=%d" % (
             model.mode, len(model.ticks), model.fill_vehicle, model.fill_free))
         with rvm.transaction() as tx:
@@ -687,6 +691,7 @@ def push(rvm, host_vm=None):
             tx.setEliteMaxLevel(model.elite_max_level or 0)
             tx.setEliteGrade(model.elite_grade or "")
             tx.setEliteSub(model.elite_sub or 0)
+            tx.setEliteCurrentIcon(getattr(model, "elite_current_icon", "") or "")
             tx.setCombatXp(model.combat_xp or 0)
             tx.setSpendableXp(model.spendable_xp or 0)
             arr = tx.getTicks()

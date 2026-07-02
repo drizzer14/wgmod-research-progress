@@ -25,6 +25,8 @@ class Mode(object):
     ELITE_REWARDS = "elite_rewards"  # tier XI w/ unearned milestone rewards: reward roadmap
     ELITE = "elite"             # elite + prestige: current grade-band progression
     COMPLETE = "complete"       # elite, no prestige data: "fully researched" badge
+    HIDDEN = "hidden"           # the mode this vehicle resolved to is disabled by a user
+                                # toggle -> hide the bar (bar_visible returns False)
 
 
 class Tick(object):
@@ -215,6 +217,7 @@ class ResearchProgressModel(object):
                  fill_vehicle, fill_free, ticks,
                  fieldmods_done=0, fieldmods_total=0, vehicle_class="",
                  elite_level=0, elite_max_level=0, elite_grade="", elite_sub=0,
+                 elite_current_icon="",
                  combat_xp=0, avail_upgrades=None, spendable_xp=0):
         self.mode = mode
         self.scale_min = scale_min
@@ -237,6 +240,10 @@ class ResearchProgressModel(object):
         self.elite_max_level = elite_max_level
         self.elite_grade = elite_grade         # complex-grade family id
         self.elite_sub = elite_sub             # current sub-grade (1..4)
+        # Emblem URL for the grade currently REACHED (family+sub), shown in the
+        # category-icon slot with the current level number over it, in BOTH elite
+        # modes. "" below the first grade / no grades -> class+elite badge fallback.
+        self.elite_current_icon = elite_current_icon
         self.combat_xp = combat_xp             # cumulative combat XP readout
         # SKILL_TREE mode: available frontier upgrade nodes (clickable chips).
         # [ProgressionStep] (step_id, name, icon, xp_cost). Empty in other modes.

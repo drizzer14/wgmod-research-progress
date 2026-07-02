@@ -70,6 +70,27 @@ def _clamp(value, low, high):
     return max(low, min(high, value))
 
 
+def current_grade_icon(snapshot):
+    """Emblem URL for the highest grade the player has currently REACHED (the
+    last (sub-)grade whose level <= the current elite level). "" below the first
+    threshold or with no grades. MAX ("prestige") -> the terminal prestige badge.
+    Shared by both elite modes so the category icon shows the current-grade chevron
+    regardless of whether the bar is the grade band or the reward roadmap."""
+    grades = sorted(snapshot.elite_grades, key=lambda g: g.level)
+    if not grades:
+        return ""
+    level = snapshot.elite_level
+    current = None
+    for g in grades:
+        if g.level <= level:
+            current = g
+        else:
+            break
+    if current is None:
+        return ""
+    return _emblem_url(current.grade, current.sub)
+
+
 def resolve_grade_band(snapshot):
     """The current grade band. Returns None if there are no grades to show."""
     grades = sorted(snapshot.elite_grades, key=lambda g: g.level)

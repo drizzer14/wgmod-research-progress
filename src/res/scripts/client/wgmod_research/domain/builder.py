@@ -22,6 +22,13 @@ def _max_pos(ticks, default):
     return max([tk.xp_position for tk in ticks]) if ticks else default
 
 
+def _on(enabled, mode):
+    """Whether `mode` is enabled. `enabled` is a set of Mode strings the user has
+    left ON; None means "all on" (the default, so callers/tests that pass no toggle
+    set behave exactly as before). A mode absent from a non-None set is OFF."""
+    return enabled is None or mode in enabled
+
+
 def bar_visible(overlay_closed, hide_always, hide_when_complete, mode, in_garage):
     """Whether the bar should render, combining the engine state (a tank-setup
     overlay open -> overlay_closed is False; the plain garage is mounted ->
@@ -29,11 +36,15 @@ def bar_visible(overlay_closed, hide_always, hide_when_complete, mode, in_garage
     unit-tests on plain inputs.
 
     - hide_always: master switch -> never show.
+    - Mode.HIDDEN: the vehicle's resolved mode is turned off by a per-mode user
+      toggle (see build_model) -> never show.
     - in_garage: show ONLY in the plain garage view (fail-closed allowlist -- any
       other lobby view, or an unreadable view signal, hides the bar).
     - hide_when_complete: hide only on fully-progressed vehicles (Mode.COMPLETE).
     - otherwise follow the overlay state (hidden while a setup overlay is open)."""
     if hide_always:
+        return False
+    if mode == t.Mode.HIDDEN:
         return False
     if not in_garage:
         return False
@@ -42,7 +53,11 @@ def bar_visible(overlay_closed, hide_always, hide_when_complete, mode, in_garage
     return overlay_closed
 
 
-def build_model(snapshot):
+def build_model(snapshot, enabled=None):
+    """`enabled` is the set of Mode strings the user has left ON (None = all on).
+    The mode is resolved by the usual priority chain; if the resolved mode is OFF,
+    the bar is HIDDEN -- there is NO fall-through to a lower-priority mode, and
+    COMPLETE is reached only when the vehicle is genuinely done (no branch matched)."""
     fill_vehicle = snapshot.vehicle_xp
     fill_free = snapshot.free_xp
     # Total spendable XP, set on every model below so the view can show per-item
@@ -51,6 +66,16 @@ def build_model(snapshot):
     fm_done = snapshot.fieldmods_done
     fm_total = snapshot.fieldmods_total
     veh_class = snapshot.vehicle_class
+
+    def _hidden():
+        # The vehicle's resolved mode is toggled off: a placeholder model whose only
+        # job is to carry Mode.HIDDEN so bar_visible() hides the bar (the view never
+        # renders it). Carries the shared fill/counter fields for consistency.
+        return t.ResearchProgressModel(
+            mode=t.Mode.HIDDEN, scale_min=0, scale_max=0,
+            fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=[],
+            fieldmods_done=fm_done, fieldmods_total=fm_total, vehicle_class=veh_class,
+            spendable_xp=spendable)
 
     # Research takes priority: while ANY tech unlock (module or next vehicle) is
     # still unresearched, show the tech tree -- even on a vehicle the account
@@ -62,6 +87,8 @@ def build_model(snapshot):
     # the exact "nothing left to research" signal.
     ticks = techtree.resolve(snapshot)
     if ticks:
+        if not _on(enabled, t.Mode.TECH_TREE):
+            return _hidden()
         return t.ResearchProgressModel(
             mode=t.Mode.TECH_TREE, scale_min=0, scale_max=_max_pos(ticks, 0),
             fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=ticks,
@@ -77,6 +104,8 @@ def build_model(snapshot):
     if snapshot.is_skill_tree:
         st = skilltree.resolve(snapshot)
         if st is not None:
+            if not _on(enabled, t.Mode.SKILL_TREE):
+                return _hidden()
             return t.ResearchProgressModel(
                 mode=t.Mode.SKILL_TREE, scale_min=st["scale_min"],
                 scale_max=st["scale_max"], fill_vehicle=st["fill"],
@@ -89,6 +118,8 @@ def build_model(snapshot):
     # researched/total field-mod-level counter in the header.
     fm_ticks = fieldmods.resolve(snapshot)
     if fm_ticks:
+        if not _on(enabled, t.Mode.FIELD_MODS):
+            return _hidden()
         return t.ResearchProgressModel(
             mode=t.Mode.FIELD_MODS, scale_min=0, scale_max=_max_pos(fm_ticks, 0),
             fill_vehicle=fill_vehicle, fill_free=fill_free, ticks=fm_ticks,
@@ -102,9 +133,13 @@ def build_model(snapshot):
         # unearned; once all are earned, fall through to the grade band.
         reward = elite.resolve_reward_track(snapshot)
         if reward is not None and reward["any_unearned"]:
+            if not _on(enabled, t.Mode.ELITE_REWARDS):
+                return _hidden()
             return _elite_model(t.Mode.ELITE_REWARDS, reward, snapshot)
         band = elite.resolve_grade_band(snapshot)
         if band is not None:
+            if not _on(enabled, t.Mode.ELITE):
+                return _hidden()
             return _elite_model(t.Mode.ELITE, band, snapshot)
 
     # nothing left to research and no prestige data: COMPLETE (elite badge).
@@ -137,5 +172,6 @@ def _elite_model(mode, res, snapshot):
         vehicle_class=snapshot.vehicle_class,
         elite_level=res["level"], elite_max_level=res["max_level"],
         elite_grade=res.get("grade", ""), elite_sub=res.get("sub", 0),
+        elite_current_icon=elite.current_grade_icon(snapshot),
         combat_xp=combat,
         spendable_xp=snapshot.vehicle_xp + snapshot.free_xp)

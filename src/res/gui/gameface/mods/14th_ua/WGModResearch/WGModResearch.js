@@ -35,6 +35,20 @@ const XP_ICON = "img://gui/maps/icons/vehicle_hub/research_purchase/total_experi
 // freeXpIcon_23x22 confirms it's the standard combat/free pair).
 const COMBAT_XP_ICON = "img://gui/maps/icons/library/xpIcon_23x22.png";
 
+// EXPERIMENT (A-B): which art fills the elite category-icon slot.
+//   "emblem" -> the hexagon grade emblem (current shipped default)
+//   "tab"    -> the battle team-HP arrowhead/chevron grade badge ("tab" art)
+// The tab set is .../prestige/tab/<family>/<size>/<grade>.png (size short|medium|
+// long). NB the tab PNGs are OPAQUE in the game files -- their see-through look in
+// battle is a game-applied style, not baked into the art. See IDEAS.md.
+const ELITE_CAT_ICON_STYLE = "tab";     // "emblem" | "tab"
+const ELITE_TAB_SIZE = "auto";          // "auto" (by digit count) | "short" | "medium" | "long"
+const ELITE_TAB_SHOW_NUMBER = true;     // overlay the elite level number on the tab
+// The terminal grade (elite lvl 350 / MAX) uses the prestige HEXAGON emblem inside
+// the arrowhead instead of a number. Flip this to true to force the MAX badge on any
+// vehicle for testing (no lvl-350 vehicle needed).
+const ELITE_TAB_FORCE_MAX = false;
+
 // Elite badge for the COMPLETE state: the in-game class+elite icon. veh class
 // ids use '-' (AT-SPG); the icon files use '_' (AT_SPG_elite.png).
 function eliteIcon(vehClass) {
@@ -51,11 +65,44 @@ function eliteIcon(vehClass) {
 // chevron `tab` art, now retired). The emblem URL arrives on the tick as t.icon
 // (.../prestige/emblem/<size>/<family>/<sub>.png, or .../prestige.png for MAX).
 const GRADE_FAMILIES = { iron: 1, bronze: 1, silver: 1, gold: 1, enamel: 1 };
+// Per-grade number tint -- the EXACT values from the game's own PrestigeProgressTab
+// component CSS (.level color per grade). enamel reuses gold, as the game does.
+const GRADE_COLOR = {
+    iron: "#909ba1",
+    bronze: "#f18140",
+    silver: "#87b2ca",
+    gold: "#ecbe6e",
+    enamel: "#ecbe6e",
+};
 function gradeFamily(emblemUrl) {
     // emblem URL is .../prestige/emblem/<size>/<family>/<sub>.png -- pull <family>.
     const m = /\/emblem\/\d+x\d+\/([a-z]+)\//.exec(emblemUrl || "");
     const fam = m ? m[1] : "";
     return GRADE_FAMILIES[fam] ? fam : "";
+}
+// Build the battle team-HP "tab" grade badge (arrowhead/chevron) URL from the
+// current-grade emblem URL, which already carries family + sub-grade:
+//   .../emblem/<size>/<family>/<sub>.png  ->  .../tab/<family>/<tabSize>/<sub>.png
+// The MAX/prestige emblem (.../prestige.png, no family) maps to the single
+// .../tab/prestige.png. Returns "" for a non-grade / empty URL (caller falls back).
+// The tab arrowhead ships in short/medium/long widths, one per level digit-count
+// (1/2/3 digits) so the numeral fills the body. "auto" picks by the level; an explicit
+// ELITE_TAB_SIZE forces one.
+function tabSizeFor(level) {
+    if (ELITE_TAB_SIZE !== "auto") return ELITE_TAB_SIZE;
+    const d = String(level | 0).length;
+    return d >= 3 ? "long" : (d === 2 ? "medium" : "short");
+}
+function gradeTabUrl(emblemUrl, size) {
+    const u = emblemUrl || "";
+    const m = /\/emblem\/\d+x\d+\/([a-z]+)\/(\d+)\.png/.exec(u);
+    if (m) {
+        return "img://gui/maps/icons/prestige/tab/" + m[1] + "/" + size + "/" + m[2] + ".png";
+    }
+    if (/\/prestige\.png$/.test(u)) {
+        return "img://gui/maps/icons/prestige/tab/prestige.png";
+    }
+    return "";
 }
 // The level number is drawn the same way the tooltip's PrestigeProgressLabel does:
 // a row of grade-colored emblemFont digit glyphs (NOT a CSS text number). The glyph
@@ -82,6 +129,48 @@ function emblemNumber(level, family) {
         wrap.appendChild(d);
     }
     return wrap;
+}
+
+// The elite level number as plain WoT-font text, matching how the garage carousel
+// draws the level on its prestige "tab" badge (a PFDINMax numeral, NOT the
+// grade-colored emblemFont image glyphs the big hexagon emblems use). Styled +
+// positioned by .wg-tab-num in the CSS.
+function tabNumber(level) {
+    const s = document.createElement("span");
+    s.className = "wg-tab-num";
+    s.textContent = String(level | 0);
+    return s;
+}
+
+// Build the arrowhead "tab" grade badge into `box` (which must carry the `wg-tab`
+// class + a 36x16rem footprint): the mirrored arrowhead art plus, unless at MAX, the
+// grade-tinted level numeral tucked into the well. `emblemUrl` is the grade emblem URL
+// (.../prestige/emblem/...), `level` the elite level to show. Shared by the elite
+// category icon and the below-bar grade ticks so both render identically. Returns
+// false when there's no tab art for the URL (caller falls back to its own glyph).
+function fillTabBadge(box, emblemUrl, level, forceMax) {
+    while (box.firstChild) box.removeChild(box.firstChild);
+    let tabUrl = gradeTabUrl(emblemUrl, tabSizeFor(level));
+    if (!tabUrl) return false;
+    // Terminal MAX grade: the prestige arrowhead carries the hexagon baked in -> no
+    // number overlay. ELITE_TAB_FORCE_MAX previews it on any vehicle (cat icon only).
+    const isMax = forceMax || /\/tab\/prestige\.png$/.test(tabUrl);
+    if (isMax) tabUrl = "img://gui/maps/icons/prestige/tab/prestige.png";
+    const art = document.createElement("span");
+    art.className = "wg-tab-art";
+    art.style.backgroundImage = "url('" + tabUrl + "')";
+    box.appendChild(art);
+    if (!isMax && ELITE_TAB_SHOW_NUMBER && level > 0) {
+        const num = tabNumber(level);
+        const c = GRADE_COLOR[gradeFamily(emblemUrl)];
+        if (c) num.style.color = c;
+        // Right-aligned in the well, so more padding = further left. The wider 3-digit
+        // well needs a bigger nudge than the 1-/2-digit ones to sit as tight as the
+        // carousel.
+        num.style.paddingRight = (String(level | 0).length >= 3 ? 9 : 7) + "rem";
+        box.appendChild(num);
+    }
+    return true;
 }
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
@@ -212,6 +301,9 @@ function tooltipHtml(t, spendableXp) {
 }
 
 function setCatIcon(el, url) {
+    // Drop any overlaid child (the elite grade-band emblem level-number) so a mode
+    // switch never leaves a stale number over another mode's category glyph.
+    while (el.firstChild) el.removeChild(el.firstChild);
     if (url) {
         el.style.backgroundImage = "url('" + url + "')";
         el.style.display = "block";
@@ -441,7 +533,8 @@ const HOT_BOTTOM_STACKED_REM = -70;
 // Visible glyph footprint (rem) hung below a tick, by mode/category. Half of it
 // (+ a small gap) is the horizontal clearance each glyph needs to not overlap.
 function glyphFootprintRem(t, mode) {
-    if (mode === "elite" || mode === "elite_rewards") return 30;   // emblem / reward thumb
+    if (mode === "elite_rewards") return 30;                       // reward thumb
+    if (mode === "elite") return 36;                               // arrowhead tab badge (36rem wide)
     if (t.category === "fieldmod") return 18;                      // hex badge
     if (t.category === "vehicle") return 45;                       // framed tank contour
     return 24;                                                     // module glyph
@@ -906,10 +999,43 @@ function renderElite(root, data, isRewards) {
         ? "EXCLUSIVE REWARDS"
         : ("Elite System" + (gradeName ? " " + gradeName : ""));
     const lvl = data.eliteLevel | 0;
-    const maxLvl = data.eliteMaxLevel | 0;
-    upgradesEl.textContent = "LVL " + lvl + (maxLvl ? "/" + maxLvl : "");
-    upgradesEl.style.display = "block";
-    setCatIcon(catIcon, eliteIcon(data.vehicleClass));
+    // The current level now rides in the category-icon arrowhead badge, so the header
+    // "LVL x/y" counter is redundant -- hide it in elite modes.
+    upgradesEl.textContent = "";
+    upgradesEl.style.display = "none";
+    // Category icon: in BOTH elite modes show the CURRENT grade emblem -- the badge
+    // of the highest grade reached, with the current elite level number over it,
+    // exactly like the tick emblems -- instead of the generic class+elite badge. The
+    // emblem URL comes from the model (domain), so it works even in ELITE_REWARDS
+    // mode, whose ticks are reward art, not grade chevrons. Empty below the first
+    // grade / no grades -> the class+elite badge fallback. The prestige/MAX badge
+    // carries no emblemFont, so gradeFamily() returns "" and the number is skipped
+    // (numberless badge), matching the in-game MAX emblem.
+    const curEmblem = data.eliteCurrentIcon || "";
+    const useTab = ELITE_CAT_ICON_STYLE === "tab" && !!gradeTabUrl(curEmblem, tabSizeFor(lvl));
+    // .wg-cat-icon-tab gives the wider arrowhead its own layout; wg-tab carries the
+    // art/num styling shared with the below-bar tick badges.
+    catIcon.classList.toggle("wg-cat-icon-tab", useTab);
+    catIcon.classList.toggle("wg-tab", useTab);
+    // Per-size centering class (shared with the ticks) so the category-icon badge
+    // content-centers on the bar's left edge and lines up with the first tick. The
+    // cat-icon element persists across renders, so clear any stale size first.
+    catIcon.classList.remove("wg-tab-short", "wg-tab-medium", "wg-tab-long");
+    if (useTab) catIcon.classList.add("wg-tab-" + tabSizeFor(lvl));
+    if (useTab) {
+        // Tab style: the cat-icon box stays anchored (centered) on the bar's LEFT edge
+        // so the NUMBER centers there. fillTabBadge draws the arrowhead art + numeral
+        // (ELITE_TAB_FORCE_MAX previews the numberless MAX hexagon on any vehicle).
+        catIcon.style.backgroundImage = "";
+        catIcon.style.display = "block";
+        fillTabBadge(catIcon, curEmblem, lvl, ELITE_TAB_FORCE_MAX);
+    } else if (curEmblem) {
+        setCatIcon(catIcon, curEmblem);
+        const curFam = gradeFamily(curEmblem);
+        if (curFam) catIcon.appendChild(emblemNumber(lvl, curFam));
+    } else {
+        setCatIcon(catIcon, eliteIcon(data.vehicleClass));
+    }
     xpEl.style.display = "flex";
     root.querySelector(".wg-xp-ico").style.backgroundImage = "url('" + COMBAT_XP_ICON + "')";
     root.querySelector(".wg-xp-val").textContent = fmtXp(data.combatXp || 0, ",");
@@ -954,21 +1080,30 @@ function renderElite(root, data, isRewards) {
 
         const gradeFam = isRewards ? "" : gradeFamily(t.icon);
         if (t.icon) {
-            // ELITE_REWARDS -> reward art thumbnail. ELITE -> the prestige HEXAGON
-            // EMBLEM: the exact badge the hangar carousel vehicle tooltip shows. The
-            // emblem PNG is solid art, drawn once (no stacking) so it reads opaque on
-            // the hangar; the level number is a row of grade-colored emblemFont digit
-            // glyphs (like the tooltip's PrestigeProgressLabel). The terminal MAX
-            // "prestige" tick has no grade family, so it shows the gold hexagon
-            // numberless -- matching the in-game MAX badge. All are state-treated
-            // background-image divs (Gameface clips an <img>).
-            const img = document.createElement("div");
-            img.className = isRewards
-                ? "wg-tick-reward"
-                : ("wg-tick-emblem" + (gradeFam ? " wg-grade-" + gradeFam : ""));
-            img.style.backgroundImage = "url('" + t.icon + "')";
-            if (!isRewards && gradeFam) {
-                img.appendChild(emblemNumber(t.position | 0, gradeFam));
+            // ELITE_REWARDS -> reward art thumbnail (a state-treated background-image
+            // div; Gameface clips an <img>). ELITE -> the arrowhead "tab" grade badge,
+            // the same one the category icon uses: fillTabBadge draws the mirrored
+            // arrowhead + grade-tinted level numeral (the terminal MAX "prestige" tick
+            // has no grade family, so it shows the numberless hexagon-arrowhead --
+            // matching the in-game MAX badge). If a grade URL somehow has no tab art,
+            // fall back to the hexagon emblem + emblemFont number.
+            let img;
+            if (isRewards) {
+                img = document.createElement("div");
+                img.className = "wg-tick-reward";
+                img.style.backgroundImage = "url('" + t.icon + "')";
+            } else {
+                img = document.createElement("div");
+                // Per-size class drives the centering nudge: the arrowhead arts are
+                // right-anchored after the mirror by different amounts (short crammed
+                // right, long ~centered), so each width needs its own margin-left to
+                // sit centered under its tick.
+                img.className = "wg-tick-tab wg-tab wg-tab-" + tabSizeFor(t.position | 0);
+                if (!fillTabBadge(img, t.icon, t.position | 0, false)) {
+                    img.className = "wg-tick-emblem" + (gradeFam ? " wg-grade-" + gradeFam : "");
+                    img.style.backgroundImage = "url('" + t.icon + "')";
+                    if (gradeFam) img.appendChild(emblemNumber(t.position | 0, gradeFam));
+                }
             }
             mark.appendChild(img);
             applyLane(mark, img, place[i] ? place[i].lane : 0);
