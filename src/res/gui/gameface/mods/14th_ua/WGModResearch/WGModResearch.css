@@ -383,9 +383,12 @@
    translateX centering + any lane translate). Shared by the tick badges AND the
    category-icon badge so both content-center on the bar's left edge and line up.
    long ~fills the box already -> ~0. */
-#wgmod-root .wg-tab-short  { margin-left: -9rem; }
-#wgmod-root .wg-tab-medium { margin-left: -6rem; }
-#wgmod-root .wg-tab-long   { margin-left: 0; }
+/* Scoped to .wg-elite: the cat-icon element is reused across modes and keeps a stale
+   wg-tab-<size> class after leaving elite, so an unscoped margin would shift the
+   tech-tree/field-mod/skill-tree category icon too. Tab badges only exist in elite. */
+#wgmod-root.wg-elite .wg-tab-short  { margin-left: -9rem; }
+#wgmod-root.wg-elite .wg-tab-medium { margin-left: -6rem; }
+#wgmod-root.wg-elite .wg-tab-long   { margin-left: 0; }
 /* art + numeral styling is shared by BOTH tab hosts (cat icon + tick badge) via .wg-tab. */
 #wgmod-root.wg-elite .wg-tab .wg-tab-art {
     position: absolute;

@@ -93,6 +93,13 @@ function tabSizeFor(level) {
     const d = String(level | 0).length;
     return d >= 3 ? "long" : (d === 2 ? "medium" : "short");
 }
+// Size class that drives the centering margin. The MAX/prestige badge (hexagon baked
+// in, no number) sits centered best in the 2-digit "medium" layout, so force it there
+// regardless of the (3-digit) max level number.
+function tabBadgeSize(emblemUrl, level, forceMax) {
+    if (forceMax || /\/prestige\.png$/.test(emblemUrl || "")) return "medium";
+    return tabSizeFor(level);
+}
 function gradeTabUrl(emblemUrl, size) {
     const u = emblemUrl || "";
     const m = /\/emblem\/\d+x\d+\/([a-z]+)\/(\d+)\.png/.exec(u);
@@ -1021,7 +1028,7 @@ function renderElite(root, data, isRewards) {
     // content-centers on the bar's left edge and lines up with the first tick. The
     // cat-icon element persists across renders, so clear any stale size first.
     catIcon.classList.remove("wg-tab-short", "wg-tab-medium", "wg-tab-long");
-    if (useTab) catIcon.classList.add("wg-tab-" + tabSizeFor(lvl));
+    if (useTab) catIcon.classList.add("wg-tab-" + tabBadgeSize(curEmblem, lvl, ELITE_TAB_FORCE_MAX));
     if (useTab) {
         // Tab style: the cat-icon box stays anchored (centered) on the bar's LEFT edge
         // so the NUMBER centers there. fillTabBadge draws the arrowhead art + numeral
@@ -1098,7 +1105,7 @@ function renderElite(root, data, isRewards) {
                 // right-anchored after the mirror by different amounts (short crammed
                 // right, long ~centered), so each width needs its own margin-left to
                 // sit centered under its tick.
-                img.className = "wg-tick-tab wg-tab wg-tab-" + tabSizeFor(t.position | 0);
+                img.className = "wg-tick-tab wg-tab wg-tab-" + tabBadgeSize(t.icon, t.position | 0, false);
                 if (!fillTabBadge(img, t.icon, t.position | 0, false)) {
                     img.className = "wg-tick-emblem" + (gradeFam ? " wg-grade-" + gradeFam : "");
                     img.style.backgroundImage = "url('" + t.icon + "')";
