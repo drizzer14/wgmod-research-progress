@@ -364,7 +364,7 @@
     /* Center the box on the bar's left edge (like a tick at pct 0), then correct the
        header-vs-track origin offset so the badge content lines up exactly with the
        first tick below. The shared .wg-tab-<size> margin-left does the rest. */
-    transform: translate(-50%, -50%) translateX(2.5rem);
+    transform: translate(-50%, -50%) translateX(1.5rem);
     overflow: visible;
 }
 /* Below-bar grade tick badge -- the same arrowhead as the cat icon (shares the

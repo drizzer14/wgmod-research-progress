@@ -760,6 +760,11 @@ function render(model) {
 
     const vehEl = root.querySelector(".wg-fill-veh");
     const freeEl = root.querySelector(".wg-fill-free");
+    // Clear any inline fill color set by a prior elite render (renderElite grade-colors
+    // the fill inline). vehEl persists across renders/modes, so without this reset that
+    // grade color leaks onto the tech-tree/field-mods/skill-tree fills, which want their
+    // own CSS tone.
+    vehEl.style.background = "";
     const ticksEl = root.querySelector(".wg-ticks");
     const tipEl = root.querySelector(".wg-tooltip");
     const hotEl = root.querySelector(".wg-hot");
@@ -1055,6 +1060,18 @@ function renderElite(root, data, isRewards) {
     const fillPos = sMin + (data.fillVehicle || 0);
     vehEl.style.left = "0%";
     vehEl.style.width = pct(fillPos) + "%";
+    // Grade-color the fill to the current grade family (iron/bronze/silver/gold),
+    // matching the tab-badge number tint. Only in the grade-band mode -- ELITE_REWARDS
+    // keeps its rarity purple (it's a reward roadmap, not a grade) -- and never in
+    // color-blind mode, where an inline background would beat the .wg-colorblind CSS
+    // override. Always reset first: vehEl persists across renders/modes, so a stale
+    // inline color would leak. Empty family (MAX/prestige, below-first-grade) keeps
+    // the CSS default gold.
+    vehEl.style.background = "";
+    if (!isRewards && !data.colorBlind) {
+        const fillColor = GRADE_COLOR[gradeFamily(curEmblem)];
+        if (fillColor) vehEl.style.background = fillColor;
+    }
     freeEl.style.left = "0%";
     freeEl.style.width = "0%";
 
