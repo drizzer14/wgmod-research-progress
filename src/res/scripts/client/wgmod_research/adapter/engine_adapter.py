@@ -194,12 +194,15 @@ def _read_tech_unlocks(veh, unlocks):
 
 def _skilltree_icon(node_type, image_name):
     """Full img:// URL for a skill-tree node's perk icon. The client stores them at
-    skillTree/tree/perks/<type>/skills/small/<imageName>.png (type = getType():
-    common|major|special|final) -- verified live. Bare getImageName() (e.g.
-    'invisibilityWhenShooting') is just the basename. Empty name -> "" (no icon)."""
+    skillTree/tree/perks/<type>/skills/<size>/<imageName>.png (type = getType():
+    common|major|special|final) -- verified live. We use the `large` (40x40) variant
+    over `small` (32x32) for a sharper glyph in the enlarged tooltip; every `small`
+    icon has a matching `large` (verified against res/packages gui-part*.pkg: 178/178
+    pairs, zero orphans). Bare getImageName() (e.g. 'invisibilityWhenShooting') is
+    just the basename. Empty name -> "" (no icon)."""
     if not image_name:
         return ""
-    return ("img://gui/maps/icons/skillTree/tree/perks/%s/skills/small/%s.png"
+    return ("img://gui/maps/icons/skillTree/tree/perks/%s/skills/large/%s.png"
             % (node_type or "common", image_name))
 
 

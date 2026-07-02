@@ -263,34 +263,70 @@ function variantsHtml(opts, optEffects) {
     return h + "</div>";
 }
 
+// A background-image icon box for the tooltip title block (module/vehicle art,
+// grade emblem, or skill-tree perk glyph -- all full img:// URLs).
+function bgIconHtml(url) {
+    return '<div class="wg-tip-icon" style="background-image:url(\'' + url + '\')"></div>';
+}
+
+// Icon markup for a tick's tooltip title block. Field mods show their signature
+// hexagon + roman numeral (matching the bar's own field-mod glyph), NOT a generic
+// section icon. Everything else shows the item's img:// art (tech-tree module /
+// vehicle glyph, grade emblem, skill-tree perk). A field-mod's t.icon is only a raw
+// basename (not a URL), so it is never used as a background image. No usable art ->
+// "" (text-only tooltip, header row omitted).
+function tickIconHtml(t) {
+    if (t.category === "fieldmod") {
+        return '<div class="wg-tip-icon wg-tip-hex"><span>' +
+            escapeHtml(romanize(t.level)) + "</span></div>";
+    }
+    if (t.icon && t.icon.indexOf("img://") === 0) return bgIconHtml(t.icon);
+    return "";
+}
+
+// Small uppercase TYPE caption above the title ("Gun" / "Field Modification II" /
+// "Upgrade" / "Elite Level N"), so every tooltip names what kind of item it is.
+function capHtml(text) {
+    return '<div class="wg-tip-caption">' + text + "</div>";
+}
+
+// Wrap the main text block (caption + title + description / variants) with the icon
+// on the RIGHT, sized (via CSS) to the height of that text block. Returns the text
+// unchanged when there's no icon to show.
+function tipMain(iconHtml, text) {
+    if (!iconHtml) return text;
+    return '<div class="wg-tip-main"><div class="wg-tip-text">' + text + "</div>" +
+        iconHtml + "</div>";
+}
+
 // Tooltip body for a tick, built as ordered sections joined by dividers for clear
-// hierarchy: HEADER (caption + title / choice variants) -> BODY (effect lines) ->
-// FOOTER ("have / need XP", or the prerequisite line when locked). A field-mod
-// choice level puts its selectable variants (each with its buffs) in the header
-// instead of a single title.
+// hierarchy: MAIN (text block [type caption + title + effect / choice variants] +
+// right-side icon) -> FOOTER ("have / need XP", or the prerequisite line when
+// locked). A field-mod choice level puts its selectable variants (each with its
+// buffs) in place of a single title.
 function tooltipHtml(t, spendableXp) {
     const opts = (t.options || "").split("\n").filter(function (s) { return s; });
     const optEffects = (t.optionEffects || "").split("\n");
-    let head = "", body = "", foot = "";
+    let text = "", foot = "";
     if (t.category === "fieldmod") {
         const r = romanize(t.level);
-        if (r) head += '<div class="wg-tip-caption">Field Modification ' + r + "</div>";
+        const cap = r ? capHtml("Field Modification " + r) : "";
         if (opts.length) {
             // Choice level -> the selectable variants ARE the content (with buffs).
-            head += variantsHtml(opts, optEffects);
+            text = cap + variantsHtml(opts, optEffects);
         } else {
             const name = tickName(t);
-            if (name) head += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
-            body = effectHtml(t.effect);
+            const nm = name ? '<div class="wg-tip-name">' + escapeHtml(name) + "</div>" : "";
+            text = cap + nm + effectHtml(t.effect);
         }
     } else {
-        // Tech-tree kind caption ("Gun"/"Turret"/.../"Tier IX").
-        if (t.kindLabel) {
-            head += '<div class="wg-tip-caption">' + escapeHtml(t.kindLabel) + "</div>";
-        }
+        // Type caption: tech-tree kind ("Gun"/"Turret"/.../"Tier IX"), else "Upgrade"
+        // for tier-XI skill-tree nodes (which carry no kindLabel).
+        const cap = t.kindLabel ? capHtml(escapeHtml(t.kindLabel))
+            : t.category === "upgrade" ? capHtml("Upgrade") : "";
         const name = tickName(t);
-        if (name) head += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
-        body = effectHtml(t.effect);
+        const nm = name ? '<div class="wg-tip-name">' + escapeHtml(name) + "</div>" : "";
+        text = cap + nm + effectHtml(t.effect);
     }
     if (t.locked) {
         // Name the blocking prerequisites when known, else the generic line.
@@ -302,9 +338,9 @@ function tooltipHtml(t, spendableXp) {
     } else {
         foot = xpFracHtml(spendableXp, t.position);
     }
-    // Title + its buffs are ONE unit (no divider between them); the divider only
+    // Text block + its icon are ONE unit (no divider between them); the divider only
     // separates that unit from the footer (cost / prerequisite).
-    return joinSections([head + body, foot]);
+    return joinSections([tipMain(tickIconHtml(t), text), foot]);
 }
 
 function setCatIcon(el, url) {
@@ -464,12 +500,16 @@ function renderNextAvailable(nextEl, arr, hotEl, spendableXp) {
             chip.appendChild(ico);
             const tip = document.createElement("div");
             tip.className = "wg-chip-tip";
-            const cHead = u.name
+            // "Upgrade" type caption (like the tech-tree "Gun" line) + name + buffs;
+            // the node's perk art (img:// URL) as the right-side icon, matching the
+            // chip glyph. Icon-less nodes fall back to text-only.
+            const cName = u.name
                 ? '<div class="wg-tip-name">' + escapeHtml(u.name) + "</div>" : "";
-            const cBody = effectHtml(u.effect);
+            const cText = capHtml("Upgrade") + cName + effectHtml(u.effect);
+            const cIcon = (u.icon && u.icon.indexOf("img://") === 0) ? bgIconHtml(u.icon) : "";
             const cFoot = xpFracHtml(spendableXp, xp);   // per-node cost (frontier nodes unlock independently)
-            // Title + buffs as one unit (no divider between them); divider before cost.
-            tip.innerHTML = joinSections([cHead + cBody, cFoot]);
+            // Text block + icon as one unit (no divider between them); divider before cost.
+            tip.innerHTML = joinSections([tipMain(cIcon, cText), cFoot]);
             chip.appendChild(tip);
             nextEl.appendChild(chip);
             chips.push({ el: chip, tip: tip, cmd: "unlockFieldMod", arg: u.actionId });
@@ -977,12 +1017,15 @@ function eliteTooltipHtml(t, isRewards, combatXp) {
         const opts = (t.options || "").split("\n").filter(function (s) { return s; });
         if (opts.length) caption = escapeHtml(opts[0]) + " · " + caption;
     }
-    let head = '<div class="wg-tip-caption">' + caption + "</div>";
-    if (name) head += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
+    // Elite ticks always carry an img:// emblem / reward thumbnail -> icon on the
+    // right; empty icon -> text-only.
+    const iconHtml = (t.icon && t.icon.indexOf("img://") === 0) ? bgIconHtml(t.icon) : "";
+    let text = capHtml(caption);
+    if (name) text += '<div class="wg-tip-name">' + escapeHtml(name) + "</div>";
     // Footer: progress to this milestone as "<earned> / <needed> combat XP" (the
     // tick's xpRequired is the cumulative combat XP to reach the level).
     const foot = xpFracHtml(combatXp, t.xpRequired);
-    return joinSections([head, foot]);
+    return joinSections([tipMain(iconHtml, text), foot]);
 }
 
 // Render the ELITE (grade band) / ELITE_REWARDS (reward roadmap) views. Reuses

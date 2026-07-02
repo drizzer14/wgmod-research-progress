@@ -783,6 +783,64 @@
     border-image-repeat: round;
     box-shadow: 0 0 32rem rgba(15, 15, 15, 0.8);   /* native tooltip shadow */
 }
+/* Main block: the text column (type caption + title + description / variants) with
+   an identifying icon on the RIGHT, sized to the block's height. min-width:0 lets a
+   long title wrap inside the tooltip max-width instead of shoving the icon off. */
+#wgmod-root .wg-tip-main {
+    display: flex;
+    align-items: stretch;       /* icon box grows to the text column's height */
+}
+#wgmod-root .wg-tip-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+#wgmod-root .wg-tip-icon {
+    flex: none;
+    align-self: stretch;        /* box height == title + description block height */
+    width: 52rem;
+    margin-left: 12rem;
+    background-repeat: no-repeat;
+    background-position: center top;  /* pin the art to the TOP -> no vertical centering on tall titles */
+    background-size: contain;   /* scale the art to the box, preserving aspect */
+    /* drop-shadow hugs the icon's alpha (it has an image fill, so this renders);
+       matches the tick glyphs' shadow so the art reads on the tooltip. */
+    filter: drop-shadow(0 1rem 2rem rgba(0, 0, 0, 0.85));
+}
+/* Field-mod tooltip icon: the signature dark hexagon + tan roman numeral (matching
+   the bar's own field-mod badge, .wg-tick-hex), NOT a generic section glyph. Fixed
+   size + vertically centered (a stretched hexagon would distort its clip-path). */
+#wgmod-root .wg-tip-hex {
+    position: relative;         /* anchor the ::before dark-fill hexagon */
+    align-self: flex-start;     /* pin to the TOP, not vertically centered */
+    width: 30rem;
+    height: 33rem;
+    background: #d8c39a;        /* light tan -- shows only as the border ring */
+    background-image: none;
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#wgmod-root .wg-tip-hex::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #15181a;        /* dark fill, like the menu badges */
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    transform: scale(0.9);      /* uniform shrink -> even, THIN border ring */
+    transform-origin: center;
+}
+#wgmod-root .wg-tip-hex span {
+    position: relative;         /* sit above the ::before dark fill */
+    z-index: 1;
+    font-family: "PFDINMax", sans-serif;
+    font-size: 15rem;
+    font-weight: 700;
+    color: #ecca9d;             /* tan numeral on the dark fill */
+}
 /* Title -- native `.Index_title` token (primary parchment, semibold). */
 #wgmod-root .wg-tip-name {
     font-size: 16rem;
