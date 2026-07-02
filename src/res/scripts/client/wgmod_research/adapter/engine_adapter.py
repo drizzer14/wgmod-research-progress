@@ -719,6 +719,30 @@ def _action_effect(action):
     return "\n".join(_kpi_lines(action))
 
 
+def _kpi_number_lines(action):
+    """Like _kpi_lines, but ONLY KPIs that carry a real signed magnitude
+    (_kpi_prefix non-empty). Used to append a figure to a tier-XI skill-tree
+    sentence: a KPI whose delta rounds to a negligible ~zero (e.g. an 'add' of
+    -0.01) has no prefix, and _kpi_lines would emit its bare phrase ("to the aiming
+    circle size") -- an orphaned, numberless fragment. Here we drop those."""
+    lines = []
+    try:
+        from gui.impl import backport
+        for k in _kpi_objs(action):
+            prefix = _kpi_prefix(k)
+            if not prefix:
+                continue
+            try:
+                acc = k.getDescriptionR()
+                desc = backport.text(acc() if callable(acc) else acc) or ""
+            except Exception:
+                desc = ""
+            lines.append((prefix + " " + desc).strip() if desc else prefix)
+    except Exception:
+        LOG_CURRENT_EXCEPTION()
+    return lines
+
+
 def _fmt_num(pct):
     """A bare magnitude for a tier-XI description template's {value} slot: an int
     when it rounds clean, else one decimal (no sign -- the template's wording
@@ -729,42 +753,64 @@ def _fmt_num(pct):
     return "%.1f" % pct
 
 
+def _skilltree_value(action):
+    """The bare {value} magnitude for a tier-XI sentence template, scanned from the
+    node's KPI objects: 'mul' -> percent (|value-1|*100), 'add' -> raw magnitude.
+    "" when no KPI carries a usable number. Unsigned -- the template's own wording
+    carries the direction (e.g. 'Reduces ... by {value}%'). Verified live (EU 2.3):
+    the signature 'mechanic' perks' generic 'value' KPI is itself typed 'mul'/'add',
+    so it fills here; an unclassifiable type leaves "" for the caller to fall back."""
+    for k in _kpi_objs(action):
+        v = getattr(k, "value", None)
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            continue
+        v = float(v)
+        ktype = getattr(k, "type", "") or ""
+        if ktype == "mul":
+            return _fmt_num(abs((v - 1.0) * 100.0))
+        if ktype == "add":
+            return _fmt_num(abs(v))
+    return ""
+
+
 def _skilltree_effect(action):
-    """Effect/bonus text for a tier-XI skill-tree node. Unlike the linear field
-    mods (whose KPI carries the phrase), skill-tree nodes -- especially the
-    signature 'mechanic' perks (major/final), whose KPI is the unlabeled generic
-    'value' -- describe themselves in a localized SENTENCE template keyed by image
-    name: R.strings.veh_skill_tree.tooltips.description.dyn(<imageName>), e.g.
-    "Reduces gun reload time by {value}% in Pillbox mode." We fill {value} with the
-    node's KPI magnitude (|value-1|*100) and strip the {colorTagOpen/Close} markup.
-    Verified live (EU 2.3). Returns "" when there's no description entry (features /
-    role slots). Best-effort, never raises."""
+    """Effect/bonus text for a tier-XI skill-tree node.
+
+    Signature 'mechanic' perks (major/final) describe themselves in a localized
+    SENTENCE template keyed by image name:
+    R.strings.veh_skill_tree.tooltips.description.dyn(<imageName>), e.g. "Reduces gun
+    reload time by {value}% in Pillbox mode." We fill {value} with the node's KPI
+    magnitude (_skilltree_value) and strip the {colorTagOpen/Close} markup.
+
+    Most nodes' templates are QUALITATIVE with no magnitude slot (e.g. "Reduces gun
+    dispersion when your gun is damaged.") -- the number lives only in the KPI. For
+    those we append the KPI's signed magnitude line(s) via _kpi_number_lines, e.g.
+    "...\n-20% to dispersion of a damaged gun", so the buff shows a figure. Ordinary
+    stat perks with NO template fall back to those KPI lines alone ("+10% to hull
+    elevation speed"). Feature/role slots (and negligible ~zero deltas) carry no
+    numbered KPI line -> "" (unchanged). Verified live (EU 2.3). Never raises."""
     try:
         from gui.impl import backport
         from gui.impl.gen import R
         image_name = _safe(lambda: action.getImageName(), "") or ""
-        if not image_name:
-            return ""
-        rid = R.strings.veh_skill_tree.tooltips.description.dyn(image_name)
-        tmpl = backport.text(rid() if callable(rid) else rid) or ""
+        tmpl = ""
+        if image_name:
+            rid = R.strings.veh_skill_tree.tooltips.description.dyn(image_name)
+            tmpl = backport.text(rid() if callable(rid) else rid) or ""
+        kpi_lines = "\n".join(_kpi_number_lines(action))
         if not tmpl or tmpl.startswith("#"):
-            return ""  # no localized description for this node
-        value = ""
-        for k in _kpi_objs(action):
-            v = getattr(k, "value", None)
-            if isinstance(v, bool) or not isinstance(v, (int, float)):
-                continue
-            v = float(v)
-            ktype = getattr(k, "type", "") or ""
-            if ktype == "mul":
-                value = _fmt_num(abs((v - 1.0) * 100.0))
-                break
-            if ktype == "add":
-                value = _fmt_num(abs(v))
-                break
-        return (tmpl.replace("{value}", value)
-                    .replace("{colorTagOpen}", "")
-                    .replace("{colorTagClose}", "").strip())
+            return kpi_lines  # no sentence template -> KPI-derived line(s) only
+        value = _skilltree_value(action)
+        filled = (tmpl.replace("{value}", value)
+                      .replace("{colorTagOpen}", "")
+                      .replace("{colorTagClose}", "").strip())
+        if "{value}" in tmpl:
+            # Template embeds its own magnitude slot (signature 'mechanic' perks).
+            # If we couldn't classify the KPI (defensive, not seen on EU 2.3), prefer
+            # the KPI-derived line so a numberless "by %" doesn't reach the tooltip.
+            return filled if value else (kpi_lines or filled)
+        # Qualitative sentence, no magnitude slot: append the KPI's signed number(s).
+        return (filled + "\n" + kpi_lines) if (filled and kpi_lines) else (filled or kpi_lines)
     except Exception:
         LOG_CURRENT_EXCEPTION()
         return ""

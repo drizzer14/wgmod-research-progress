@@ -1002,6 +1002,11 @@ function renderElite(root, data, isRewards) {
     ensureHover(hotEl, tipEl);
     hotEl._wgMode = data.mode;   // elite/elite_rewards -> nearest-anywhere tick hover
     hotEl._wgChips = [];         // no upgrade chips in elite modes
+    // Null the chip signature too, else a skill_tree vehicle returned to after this
+    // elite render keeps its stale _wgSig and render() takes the re-show-without-
+    // rebuild branch -> chip DOM shows but _wgChips stays empty -> dead hover/click.
+    const nextSig = root.querySelector(".wg-next");
+    if (nextSig) nextSig._wgSig = null;
 
     // Header: title (grade family / "EXCLUSIVE REWARDS"), the Elite-level
     // counter, the class+elite badge, and the combat-XP readout.
