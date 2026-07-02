@@ -5,8 +5,9 @@ to a deeper research note under `IDEAS/` for the implementer.
 
 ## Open
 
-### Add icons to tooltips' title block
-Show a small icon in the tooltip header so each tooltip is identifiable at a glance
-(module/vehicle icon next to the tech-tree name, field-mod glyph next to the
-caption, grade emblem next to "Elite Level N"). Feasible and front-end-only — the
-tick already carries the icon. → Research: `IDEAS/tooltip-title-icons.md`
+### Restructure README.md as a consumer-facing doc
+The mod was rejected on wgmods, so GitHub is now the primary distribution platform
+and README.md is the landing page. Rewrite it as a player-facing product page
+(pitch, screenshot, features, download via Releases, install → INSTALL.md) and move
+the developer content out. Reuse the consumer copy in `docs/wgmods-listing.md`;
+screenshots still need capturing. → Research: `IDEAS/readme-consumer-restructure.md`
